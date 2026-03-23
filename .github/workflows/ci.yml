@@ -1,0 +1,125 @@
+name: PRISP CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ─────────────────────────────────────────
+  #  Backend: import check + health test
+  # ─────────────────────────────────────────
+  backend:
+    name: Backend checks
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: prisp
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/prisp
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt httpx
+
+      - name: Apply database schema
+        run: psql "$DATABASE_URL" -f ../database/schema.sql
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+
+      - name: Verify app imports cleanly
+        run: python -c "from app.main import app; print('App loaded OK')"
+
+      - name: Smoke-test health endpoint
+        run: |
+          python - <<'EOF'
+          from fastapi.testclient import TestClient
+          from app.main import app
+          client = TestClient(app)
+          r = client.get("/health")
+          assert r.status_code == 200, f"Expected 200, got {r.status_code}"
+          assert r.json()["status"] == "ok"
+          print("Health check PASSED:", r.json())
+          EOF
+
+      - name: Smoke-test task list endpoint (DB up)
+        run: |
+          python - <<'EOF'
+          from fastapi.testclient import TestClient
+          from app.main import app
+          client = TestClient(app)
+          r = client.get("/api/v1/tasks")
+          assert r.status_code == 200, f"Expected 200, got {r.status_code}: {r.text}"
+          data = r.json()
+          assert isinstance(data, list)
+          print(f"Tasks endpoint PASSED — {len(data)} tasks returned")
+          EOF
+
+      - name: Smoke-test export endpoints (csv, xlsx, pdf)
+        run: |
+          python - <<'EOF'
+          from fastapi.testclient import TestClient
+          from app.main import app
+          client = TestClient(app)
+          for fmt in ["csv", "xlsx", "pdf"]:
+              r = client.get(f"/api/v1/tasks/export/{fmt}")
+              assert r.status_code == 200, f"Export {fmt}: expected 200, got {r.status_code}"
+              print(f"Export {fmt} PASSED")
+          EOF
+
+  # ─────────────────────────────────────────
+  #  Frontend: Next.js build check
+  # ─────────────────────────────────────────
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: TypeScript type-check
+        run: npx tsc --noEmit
+
+      - name: Next.js build
+        run: npm run build
