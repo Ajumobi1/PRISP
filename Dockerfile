@@ -7,7 +7,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt ./backend/requirements.txt
-RUN python3 -m pip install --no-cache-dir -r backend/requirements.txt
+RUN python3 -m pip install --no-cache-dir --break-system-packages -r backend/requirements.txt
 
 COPY frontend/package*.json ./frontend/
 WORKDIR /app/frontend
