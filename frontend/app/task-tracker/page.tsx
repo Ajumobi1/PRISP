@@ -26,15 +26,6 @@ type ViewMode = "table" | "kanban";
 
 const units: UnitName[] = ["Planning", "Research", "Statistics", "M&E"];
 const priorities: TaskPriority[] = ["Urgent/High", "Medium", "Low"];
-const assigneeOptions = [
-  "A. Olatunji",
-  "S. Balogun",
-  "R. Ajayi",
-  "M. Adeyemi",
-  "D. Ogunleye",
-  "K. Yusuf",
-  "F. Okafor",
-];
 
 const priorityClasses: Record<TaskPriority, string> = {
   "Urgent/High": "bg-red-100 text-red-700 border-red-200",
@@ -56,6 +47,7 @@ export default function TaskTrackerPage() {
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  const [assigneeInput, setAssigneeInput] = useState("");
   const [uploadQueue, setUploadQueue] = useState<File[]>([]);
   const [taskUploads, setTaskUploads] = useState<Record<string, TaskAttachment[]>>({});
   const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null);
@@ -107,10 +99,22 @@ export default function TaskTrackerPage() {
 
   const getTaskKey = (task: PRSTask) => task.id ?? `sn-${task.serialNumber}`;
 
-  const toggleAssignee = (assignee: string) => {
-    setSelectedAssignees((prev) =>
-      prev.includes(assignee) ? prev.filter((item) => item !== assignee) : [...prev, assignee]
-    );
+  const addAssignee = () => {
+    const candidate = assigneeInput.trim();
+    if (!candidate) {
+      return;
+    }
+    setSelectedAssignees((prev) => {
+      if (prev.includes(candidate)) {
+        return prev;
+      }
+      return [...prev, candidate];
+    });
+    setAssigneeInput("");
+  };
+
+  const removeAssignee = (assignee: string) => {
+    setSelectedAssignees((prev) => prev.filter((item) => item !== assignee));
   };
 
   const onAddTask = async () => {
@@ -257,25 +261,46 @@ export default function TaskTrackerPage() {
             ))}
           </Select>
 
-          <details className="rounded-md border border-input bg-white px-3 py-2">
-            <summary className="cursor-pointer text-sm font-medium">
+          <div className="rounded-md border border-input bg-white px-3 py-2">
+            <p className="text-sm font-medium">
               {selectedAssignees.length > 0
                 ? `Assignees (${selectedAssignees.length})`
-                : "Select Assignees"}
-            </summary>
-            <div className="mt-2 max-h-44 space-y-2 overflow-auto pr-1 text-sm">
-              {assigneeOptions.map((assignee) => (
-                <label key={assignee} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedAssignees.includes(assignee)}
-                    onChange={() => toggleAssignee(assignee)}
-                  />
-                  <span>{assignee}</span>
-                </label>
-              ))}
+                : "Assignees"}
+            </p>
+            <div className="mt-2 flex items-center gap-2">
+              <Input
+                placeholder="Add assignee name"
+                value={assigneeInput}
+                onChange={(event) => setAssigneeInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addAssignee();
+                  }
+                }}
+              />
+              <Button type="button" variant="outline" onClick={addAssignee}>
+                Add
+              </Button>
             </div>
-          </details>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {selectedAssignees.length === 0 ? (
+                <span className="text-xs text-muted-foreground">No assignees added yet.</span>
+              ) : (
+                selectedAssignees.map((assignee) => (
+                  <button
+                    key={assignee}
+                    type="button"
+                    className="rounded-full border px-3 py-1 text-xs"
+                    onClick={() => removeAssignee(assignee)}
+                    title="Remove assignee"
+                  >
+                    {assignee} ×
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
 
           <Input
             type="date"
