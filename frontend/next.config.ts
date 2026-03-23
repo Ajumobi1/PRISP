@@ -5,6 +5,14 @@ const nextConfig: NextConfig = {
   experimental: {
     allowedDevOrigins: ["localhost:3000", "localhost:3001", "*.replit.dev", "*.repl.co"],
   },
+  async rewrites() {
+    return [
+      {
+        source: "/api/:path*",
+        destination: "http://127.0.0.1:8000/api/:path*",
+      },
+    ];
+  },
 };
 
 export default nextConfig;

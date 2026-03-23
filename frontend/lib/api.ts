@@ -1,6 +1,6 @@
 import { PRSTask, TaskPriority, TaskStatus, UnitName } from "@/lib/task-types";
 
-const API_BASE = "http://localhost:8000/api/v1";
+const API_BASE = "/api/v1";
 interface ApiTask {
   id: string;
   serial_number: number;
