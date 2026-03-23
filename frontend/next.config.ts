@@ -8,9 +8,6 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  experimental: {
-    allowedDevOrigins: ["localhost:3000", "localhost:3001", "*.replit.dev", "*.repl.co"],
-  },
   async rewrites() {
     return [
       {
