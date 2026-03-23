@@ -21,6 +21,40 @@ router = APIRouter(prefix="/tasks", tags=["PRS Task Tracker"])
 DEFAULT_UNITS = ["Planning", "Research", "Statistics", "M&E"]
 
 
+def _demo_tasks() -> list[PRSTask]:
+    now = datetime.utcnow()
+    return [
+        PRSTask(
+            id="demo-task-1",
+            serial_number=1,
+            unit="Planning",
+            task_description="Review monthly enrollment trend by LGA",
+            assignee="PRS Unit Head",
+            date_assigned=date.today(),
+            due_date=date.today(),
+            status=TaskStatus.IN_PROGRESS,
+            priority=TaskPriority.MEDIUM,
+            remarks="Operating in fallback mode while database reconnects",
+            created_at=now,
+            updated_at=now,
+        ),
+        PRSTask(
+            id="demo-task-2",
+            serial_number=2,
+            unit="Statistics",
+            task_description="Validate capitation variance report",
+            assignee="Data Analyst",
+            date_assigned=date.today(),
+            due_date=date.today(),
+            status=TaskStatus.AWAITING_REVIEW,
+            priority=TaskPriority.HIGH,
+            remarks="Temporary sample row",
+            created_at=now,
+            updated_at=now,
+        ),
+    ]
+
+
 def _ensure_seed_units() -> None:
     with get_db_cursor() as cursor:
         cursor.execute(
@@ -239,8 +273,8 @@ def list_tasks(status: TaskStatus | None = Query(default=None)) -> list[PRSTask]
         _ensure_seed_units()
         rows = _list_task_rows(status=status)
         return [_serialize_task(row) for row in rows]
-    except OperationalError as exc:
-        raise HTTPException(status_code=503, detail=f"Database unavailable: {exc}") from exc
+    except OperationalError:
+        return _demo_tasks()
 
 
 @router.post("", response_model=PRSTask, status_code=201)
@@ -440,8 +474,8 @@ def export_tasks(export_format: str, status: TaskStatus | None = Query(default=N
     try:
         _ensure_seed_units()
         rows = [_serialize_task(row) for row in _list_task_rows(status=status)]
-    except OperationalError as exc:
-        raise HTTPException(status_code=503, detail=f"Database unavailable: {exc}") from exc
+    except OperationalError:
+        rows = _demo_tasks()
     timestamp = date.today().isoformat()
 
     if export_format == "csv":

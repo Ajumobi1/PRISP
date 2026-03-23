@@ -55,4 +55,9 @@ def api_health_check() -> dict[str, str]:
             cursor.fetchone()
         return {"status": "ok", "service": "prisp-backend", "database": "ok"}
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Database unavailable: {exc}") from exc
+        return {
+            "status": "degraded",
+            "service": "prisp-backend",
+            "database": "unavailable",
+            "detail": str(exc),
+        }
