@@ -120,7 +120,7 @@ def submit_cof_request(payload: CofRequestCreate):
     """Submit a new Change of Facility request."""
     try:
         with get_db_cursor() as cursor:
-            # Validate beneficiary exists and is active
+            # Lookup beneficiary by enrollee_number to get UUID
             cursor.execute(
                 """
                 SELECT id
@@ -129,22 +129,25 @@ def submit_cof_request(payload: CofRequestCreate):
                 """,
                 (payload.beneficiary_id,),
             )
-            if not cursor.fetchone():
+            ben = cursor.fetchone()
+            if not ben:
                 raise HTTPException(status_code=404, detail="Beneficiary not found or inactive")
+            
+            beneficiary_uuid = str(ben["id"])
 
             # Validate facilities exist
             cursor.execute(
                 """
                 SELECT id
                 FROM facilities
-                WHERE facility_code IN (%s, %s) AND is_active = TRUE
+                WHERE (id = %s OR id = %s) AND is_active = TRUE
                 """,
                 (payload.from_facility_id, payload.to_facility_id),
             )
             if len(cursor.fetchall()) != 2:
                 raise HTTPException(status_code=404, detail="One or both facilities not found or inactive")
 
-            # Create CoF request
+            # Create CoF request with UUID references
             cursor.execute(
                 """
                 INSERT INTO cof_requests (beneficiary_id, from_facility_id, to_facility_id, reason)
@@ -152,7 +155,7 @@ def submit_cof_request(payload: CofRequestCreate):
                 RETURNING *
                 """,
                 (
-                    payload.beneficiary_id,
+                    beneficiary_uuid,
                     payload.from_facility_id,
                     payload.to_facility_id,
                     payload.reason,
@@ -284,14 +287,12 @@ def approve_cof_request(cof_id: str, payload: CofRequestApproval):
             )
             updated_cof = cursor.fetchone()
 
-            # Update beneficiary's facility
+            # Update beneficiary's facility using the UUID from the CoF record
             cursor.execute(
                 """
                 UPDATE beneficiaries
-                SET current_facility_id = (
-                    SELECT id FROM facilities WHERE facility_code = %s LIMIT 1
-                )
-                WHERE enrollee_number = %s
+                SET current_facility_id = %s
+                WHERE id = %s
                 """,
                 (cof["to_facility_id"], cof["beneficiary_id"]),
             )

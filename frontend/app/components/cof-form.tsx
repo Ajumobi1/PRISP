@@ -86,13 +86,25 @@ export default function FacilityChangeForm() {
 
     setLoading(true);
     try {
+      // Get facility codes
+      const fromFacility = facilities.find(
+        (f) => f.id === selectedBeneficiary?.current_facility_id
+      );
+      const toFacility = facilities.find((f) => f.id === targetFacility);
+
+      if (!fromFacility || !toFacility) {
+        setMessage({ type: "error", text: "Facility mismatch" });
+        setLoading(false);
+        return;
+      }
+
       const res = await fetch(`${API_BASE}/cof/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           beneficiary_id: selectedBeneficiary.enrollee_number,
-          from_facility_id: selectedBeneficiary.current_facility_id,
-          to_facility_id: targetFacility,
+          from_facility_id: fromFacility.facility_code,
+          to_facility_id: toFacility.facility_code,
           reason: reason.trim(),
         }),
       });

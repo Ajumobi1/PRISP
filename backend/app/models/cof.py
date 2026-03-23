@@ -13,9 +13,9 @@ class CofStatus(str, Enum):
 
 
 class CofRequestBase(BaseModel):
-    beneficiary_id: str = Field(min_length=1)
-    from_facility_id: str = Field(min_length=1)
-    to_facility_id: str = Field(min_length=1)
+    beneficiary_id: str = Field(min_length=1)  # enrollee_number
+    from_facility_id: str = Field(min_length=1)  # facility_code
+    to_facility_id: str = Field(min_length=1)  # facility_code
     reason: str = Field(min_length=5)
 
 
