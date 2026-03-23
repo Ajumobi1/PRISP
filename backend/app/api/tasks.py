@@ -2,6 +2,7 @@ import csv
 import io
 from datetime import date, datetime
 from typing import List
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -19,6 +20,7 @@ from app.models.task import PRSTask, PRSTaskCreate, TaskPriority, TaskStatus
 router = APIRouter(prefix="/tasks", tags=["PRS Task Tracker"])
 
 DEFAULT_UNITS = ["Planning", "Research", "Statistics", "M&E"]
+FALLBACK_CREATED_TASKS: list[PRSTask] = []
 
 
 def _demo_tasks() -> list[PRSTask]:
@@ -53,6 +55,13 @@ def _demo_tasks() -> list[PRSTask]:
             updated_at=now,
         ),
     ]
+
+
+def _fallback_tasks(status: TaskStatus | None = None) -> list[PRSTask]:
+    tasks = _demo_tasks() + FALLBACK_CREATED_TASKS
+    if status is None:
+        return tasks
+    return [task for task in tasks if task.status == status]
 
 
 def _ensure_seed_units() -> None:
@@ -274,7 +283,7 @@ def list_tasks(status: TaskStatus | None = Query(default=None)) -> list[PRSTask]
         rows = _list_task_rows(status=status)
         return [_serialize_task(row) for row in rows]
     except OperationalError:
-        return _demo_tasks()
+        return _fallback_tasks(status)
 
 
 @router.post("", response_model=PRSTask, status_code=201)
@@ -347,7 +356,23 @@ def create_task(payload: PRSTaskCreate) -> PRSTask:
             row = cursor.fetchone()
             return _serialize_task(row)
     except OperationalError as exc:
-        raise HTTPException(status_code=503, detail=f"Database unavailable: {exc}") from exc
+        now = datetime.utcnow()
+        fallback_task = PRSTask(
+            id=f"offline-{uuid4()}",
+            serial_number=len(_fallback_tasks()) + 1,
+            unit=payload.unit,
+            task_description=payload.task_description,
+            assignee=payload.assignee,
+            date_assigned=payload.date_assigned,
+            due_date=payload.due_date,
+            status=payload.status,
+            priority=payload.priority,
+            remarks=(payload.remarks or "") + " [offline mode: DB unavailable]",
+            created_at=now,
+            updated_at=now,
+        )
+        FALLBACK_CREATED_TASKS.append(fallback_task)
+        return fallback_task
 
 
 @router.get("/{task_id}", response_model=PRSTask)
@@ -475,7 +500,7 @@ def export_tasks(export_format: str, status: TaskStatus | None = Query(default=N
         _ensure_seed_units()
         rows = [_serialize_task(row) for row in _list_task_rows(status=status)]
     except OperationalError:
-        rows = _demo_tasks()
+        rows = _fallback_tasks(status)
     timestamp = date.today().isoformat()
 
     if export_format == "csv":
