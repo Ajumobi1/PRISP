@@ -4,6 +4,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.tasks import router as tasks_router
+from app.api.cof import router as cof_router
+from app.api.beneficiaries import router as beneficiaries_router
+from app.api.facilities import router as facilities_router
 
 
 def _get_allowed_origins() -> list[str]:
@@ -33,6 +36,9 @@ app.add_middleware(
 )
 
 app.include_router(tasks_router, prefix="/api/v1")
+app.include_router(cof_router, prefix="/api/v1")
+app.include_router(beneficiaries_router, prefix="/api/v1")
+app.include_router(facilities_router, prefix="/api/v1")
 
 
 @app.get("/health")
