@@ -1,9 +1,6 @@
 import { PRSTask, TaskPriority, TaskStatus, UnitName } from "@/lib/task-types";
 
-const API_BASE =
-  (globalThis as typeof globalThis & {
-    process?: { env?: { NEXT_PUBLIC_API_BASE_URL?: string } };
-  }).process?.env?.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "/api/v1";
+const API_BASE = "/api/v1";
 
 interface ApiTask {
   id: string;
