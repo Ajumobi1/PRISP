@@ -2,9 +2,11 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {}
+export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
+  children?: React.ReactNode;
+}
 
-const Select = React.forwardRef<HTMLSelectElement, SelectProps>(({ className, ...props }, ref) => {
+const Select = React.forwardRef<HTMLSelectElement, SelectProps>(({ className, children, ...props }, ref) => {
   return (
     <select
       className={cn(
@@ -14,7 +16,9 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(({ className, ..
       )}
       ref={ref}
       {...props}
-    />
+    >
+      {children}
+    </select>
   );
 });
 
