@@ -283,21 +283,30 @@ export default function TaskTrackerPage() {
                 Add
               </Button>
             </div>
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-2">
               {selectedAssignees.length === 0 ? (
                 <span className="text-xs text-muted-foreground">No assignees added yet.</span>
               ) : (
-                selectedAssignees.map((assignee) => (
-                  <button
-                    key={assignee}
-                    type="button"
-                    className="rounded-full border px-3 py-1 text-xs"
-                    onClick={() => removeAssignee(assignee)}
-                    title="Remove assignee"
-                  >
-                    {assignee} ×
-                  </button>
-                ))
+                <details className="rounded border border-input px-2 py-1">
+                  <summary className="cursor-pointer text-xs text-muted-foreground">
+                    View added names ({selectedAssignees.length})
+                  </summary>
+                  <div className="mt-2 max-h-32 space-y-1 overflow-auto">
+                    {selectedAssignees.map((assignee) => (
+                      <div key={assignee} className="flex items-center justify-between gap-2 rounded border px-2 py-1 text-xs">
+                        <span className="truncate">{assignee}</span>
+                        <button
+                          type="button"
+                          className="text-red-700"
+                          onClick={() => removeAssignee(assignee)}
+                          title="Remove assignee"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </details>
               )}
             </div>
           </div>
