@@ -1,12 +1,13 @@
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.tasks import router as tasks_router
 from app.api.cof import router as cof_router
 from app.api.beneficiaries import router as beneficiaries_router
 from app.api.facilities import router as facilities_router
+from app.db import get_db_cursor
 
 
 def _get_allowed_origins() -> list[str]:
@@ -44,3 +45,14 @@ app.include_router(facilities_router, prefix="/api/v1")
 @app.get("/health")
 def health_check() -> dict[str, str]:
     return {"status": "ok", "service": "prisp-backend"}
+
+
+@app.get("/api/v1/health")
+def api_health_check() -> dict[str, str]:
+    try:
+        with get_db_cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+        return {"status": "ok", "service": "prisp-backend", "database": "ok"}
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {exc}") from exc
