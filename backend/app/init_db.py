@@ -1,0 +1,33 @@
+from pathlib import Path
+
+import psycopg
+from psycopg import Error
+
+from app.db import DATABASE_URL
+
+
+DUPLICATE_SQLSTATES = {"42P07", "42710"}
+
+
+def main() -> None:
+    schema_path = Path(__file__).resolve().parents[2] / "database" / "schema.sql"
+    schema_sql = schema_path.read_text(encoding="utf-8")
+
+    with psycopg.connect(DATABASE_URL) as connection:
+        with connection.cursor() as cursor:
+            _run_schema(cursor, schema_sql)
+        connection.commit()
+
+def _run_schema(cursor, schema_sql: str) -> None:
+    statements = [statement.strip() for statement in schema_sql.split(";") if statement.strip()]
+
+    for statement in statements:
+        try:
+            cursor.execute(f"{statement};")
+        except Error as exc:
+            if exc.sqlstate in DUPLICATE_SQLSTATES:
+                continue
+            raise
+
+if __name__ == "__main__":
+    main()
