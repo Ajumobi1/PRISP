@@ -106,6 +106,7 @@ jobs:
 
     env:
       NEXT_TELEMETRY_DISABLED: 1
+      BACKEND_API_BASE_URL: https://example.com/api/v1
 
     defaults:
       run:
@@ -120,10 +121,7 @@ jobs:
           node-version: "20"
 
       - name: Install dependencies
-        run: npm install
-
-      - name: TypeScript type-check
-        run: npx tsc --noEmit
+        run: npm ci --include=dev
 
       - name: Next.js build
         run: npm run build
