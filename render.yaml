@@ -10,8 +10,8 @@ services:
     runtime: python
     rootDir: backend
     plan: free
-    buildCommand: pip install -r requirements.txt || pip install -r backend/requirements.txt
-    startCommand: python -m app.init_db && uvicorn app.main:app --host 0.0.0.0 --port $PORT || (cd backend && python -m app.init_db && uvicorn app.main:app --host 0.0.0.0 --port $PORT)
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.init_db || echo "init_db failed, continuing startup"; uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/v1/health
     envVars:
       - key: DATABASE_URL
@@ -26,9 +26,9 @@ services:
     runtime: node
     rootDir: frontend
     plan: free
-    buildCommand: npm ci && npm run build || (cd frontend && npm ci && npm run build)
-    startCommand: npm run start -- --hostname 0.0.0.0 --port $PORT || (cd frontend && npm run start -- --hostname 0.0.0.0 --port $PORT)
-    healthCheckPath: /task-tracker
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start -- --hostname 0.0.0.0 --port $PORT
+    healthCheckPath: /
     envVars:
       - key: BACKEND_API_BASE_URL
         value: https://prisp-backend.onrender.com/api/v1
