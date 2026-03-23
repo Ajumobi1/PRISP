@@ -8,9 +8,10 @@ services:
   - type: web
     name: prisp-backend
     runtime: python
+    rootDir: backend
     plan: free
-    buildCommand: pip install -r backend/requirements.txt
-    startCommand: cd backend && python -m app.init_db && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install -r requirements.txt || pip install -r backend/requirements.txt
+    startCommand: python -m app.init_db && uvicorn app.main:app --host 0.0.0.0 --port $PORT || (cd backend && python -m app.init_db && uvicorn app.main:app --host 0.0.0.0 --port $PORT)
     healthCheckPath: /api/v1/health
     envVars:
       - key: DATABASE_URL
@@ -23,9 +24,10 @@ services:
   - type: web
     name: prisp-frontend
     runtime: node
+    rootDir: frontend
     plan: free
-    buildCommand: cd frontend && npm install && npm run build
-    startCommand: cd frontend && npm run start -- --hostname 0.0.0.0 --port $PORT
+    buildCommand: npm ci && npm run build || (cd frontend && npm ci && npm run build)
+    startCommand: npm run start -- --hostname 0.0.0.0 --port $PORT || (cd frontend && npm run start -- --hostname 0.0.0.0 --port $PORT)
     healthCheckPath: /
     envVars:
       - key: BACKEND_API_BASE_URL
