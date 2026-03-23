@@ -1,0 +1,4 @@
+run = "bash replit-start.sh"
+
+[build]
+command = "cd backend && pip install -r requirements.txt && cd ../frontend && npm install && npm run build"
