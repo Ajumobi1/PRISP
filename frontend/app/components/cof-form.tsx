@@ -1,7 +1,9 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 const API_BASE = "/api/v1";
@@ -199,19 +201,18 @@ export default function FacilityChangeForm() {
         {/* Target Facility Dropdown */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Target Facility</label>
-          <Select value={targetFacility} onValueChange={setTargetFacility}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select new facility..." />
-            </SelectTrigger>
-            <SelectContent>
+          <Select
+            value={targetFacility}
+            onChange={(event) => setTargetFacility(event.target.value)}
+          >
+            <option value="">Select new facility...</option>
               {facilities
                 .filter((f) => f.id !== selectedBeneficiary?.current_facility_id)
                 .map((facility) => (
-                  <SelectItem key={facility.id} value={facility.id}>
+                  <option key={facility.id} value={facility.id}>
                     {facility.facility_name}
-                  </SelectItem>
+                  </option>
                 ))}
-            </SelectContent>
           </Select>
           {targetFacilityObj && (
             <p className="text-xs text-green-600 mt-1">✓ {targetFacilityObj.facility_code}</p>
