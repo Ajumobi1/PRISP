@@ -9,6 +9,7 @@ from app.api.tasks import router as tasks_router
 from app.api.cof import router as cof_router
 from app.api.beneficiaries import router as beneficiaries_router
 from app.api.facilities import router as facilities_router
+from app.api.sqlalchemy_health import router as sqlalchemy_health_router
 from app.db import get_db_cursor
 
 
@@ -47,6 +48,7 @@ app.include_router(tasks_router, prefix="/api/v1")
 app.include_router(cof_router, prefix="/api/v1")
 app.include_router(beneficiaries_router, prefix="/api/v1")
 app.include_router(facilities_router, prefix="/api/v1")
+app.include_router(sqlalchemy_health_router, prefix="/api/v1")
 
 
 @app.on_event("startup")
