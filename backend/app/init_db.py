@@ -3,7 +3,7 @@ from pathlib import Path
 import psycopg
 from psycopg import Error
 
-from app.db import DATABASE_URL
+from app.db import get_database_url
 
 
 DUPLICATE_SQLSTATES = {"42P07", "42710"}
@@ -12,8 +12,9 @@ DUPLICATE_SQLSTATES = {"42P07", "42710"}
 def main() -> None:
     schema_path = Path(__file__).resolve().parents[2] / "database" / "schema.sql"
     schema_sql = schema_path.read_text(encoding="utf-8")
+    database_url = get_database_url()
 
-    with psycopg.connect(DATABASE_URL) as connection:
+    with psycopg.connect(database_url) as connection:
         with connection.cursor() as cursor:
             _run_schema(cursor, schema_sql)
         connection.commit()
