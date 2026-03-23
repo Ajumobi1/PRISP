@@ -14,12 +14,26 @@ load_dotenv()
 DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/prisp?connect_timeout=3"
 
 
+def _build_database_url_from_parts() -> str | None:
+    host = os.getenv("PGHOST") or os.getenv("POSTGRES_HOST")
+    port = os.getenv("PGPORT") or os.getenv("POSTGRES_PORT") or "5432"
+    user = os.getenv("PGUSER") or os.getenv("POSTGRES_USER")
+    password = os.getenv("PGPASSWORD") or os.getenv("POSTGRES_PASSWORD")
+    database = os.getenv("PGDATABASE") or os.getenv("POSTGRES_DB")
+
+    if host and user and password and database:
+        return f"postgresql://{user}:{password}@{host}:{port}/{database}?connect_timeout=5"
+
+    return None
+
+
 def _pick_database_url() -> str:
     return (
         os.getenv("DATABASE_URL")
         or os.getenv("POSTGRES_URL")
         or os.getenv("POSTGRES_INTERNAL_URL")
         or os.getenv("POSTGRESQL_URL")
+        or _build_database_url_from_parts()
         or DATABASE_URL
     )
 

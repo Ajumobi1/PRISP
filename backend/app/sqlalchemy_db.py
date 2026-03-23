@@ -11,12 +11,26 @@ from sqlalchemy.orm import Session, sessionmaker
 DEFAULT_DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/prisp"
 
 
+def _build_database_url_from_parts() -> str | None:
+    host = os.getenv("PGHOST") or os.getenv("POSTGRES_HOST")
+    port = os.getenv("PGPORT") or os.getenv("POSTGRES_PORT") or "5432"
+    user = os.getenv("PGUSER") or os.getenv("POSTGRES_USER")
+    password = os.getenv("PGPASSWORD") or os.getenv("POSTGRES_PASSWORD")
+    database = os.getenv("PGDATABASE") or os.getenv("POSTGRES_DB")
+
+    if host and user and password and database:
+        return f"postgresql+psycopg://{user}:{password}@{host}:{port}/{database}"
+
+    return None
+
+
 def _pick_database_url() -> str:
     raw = (
         os.getenv("DATABASE_URL")
         or os.getenv("POSTGRES_URL")
         or os.getenv("POSTGRES_INTERNAL_URL")
         or os.getenv("POSTGRESQL_URL")
+        or _build_database_url_from_parts()
         or DEFAULT_DATABASE_URL
     )
 
