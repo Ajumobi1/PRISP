@@ -43,7 +43,7 @@ def list_facilities(
                 for row in rows
             ]
 
-    except OperationalError as e:
+    except (OperationalError, RuntimeError) as e:
         raise HTTPException(status_code=503, detail="Database connection failed")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to retrieve facilities: {str(e)}")
@@ -85,7 +85,7 @@ def get_facility(facility_id: str):
 
     except HTTPException:
         raise
-    except OperationalError as e:
+    except (OperationalError, RuntimeError) as e:
         raise HTTPException(status_code=503, detail="Database connection failed")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to retrieve facility: {str(e)}")

@@ -177,7 +177,7 @@ def submit_cof_request(payload: CofRequestCreate):
 
     except HTTPException:
         raise
-    except OperationalError as e:
+    except (OperationalError, RuntimeError) as e:
         raise HTTPException(status_code=503, detail="Database connection failed")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to create CoF request: {str(e)}")
@@ -216,7 +216,7 @@ def list_cof_requests(
 
             return [_serialize_cof(row) for row in rows]
 
-    except OperationalError as e:
+    except (OperationalError, RuntimeError) as e:
         raise HTTPException(status_code=503, detail="Database connection failed")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to retrieve CoF requests: {str(e)}")
@@ -244,7 +244,7 @@ def get_cof_request(cof_id: str):
 
     except HTTPException:
         raise
-    except OperationalError as e:
+    except (OperationalError, RuntimeError) as e:
         raise HTTPException(status_code=503, detail="Database connection failed")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to retrieve CoF request: {str(e)}")
@@ -315,7 +315,7 @@ def approve_cof_request(cof_id: str, payload: CofRequestApproval):
 
     except HTTPException:
         raise
-    except OperationalError as e:
+    except (OperationalError, RuntimeError) as e:
         raise HTTPException(status_code=503, detail="Database connection failed")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to approve CoF request: {str(e)}")
@@ -377,7 +377,7 @@ def reject_cof_request(cof_id: str, payload: CofRequestApproval):
 
     except HTTPException:
         raise
-    except OperationalError as e:
+    except (OperationalError, RuntimeError) as e:
         raise HTTPException(status_code=503, detail="Database connection failed")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to reject CoF request: {str(e)}")

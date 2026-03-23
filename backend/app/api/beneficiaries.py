@@ -54,7 +54,7 @@ def list_beneficiaries(
                 for row in rows
             ]
 
-    except OperationalError as e:
+    except (OperationalError, RuntimeError) as e:
         raise HTTPException(status_code=503, detail="Database connection failed")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to retrieve beneficiaries: {str(e)}")

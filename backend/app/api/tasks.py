@@ -282,7 +282,7 @@ def list_tasks(status: TaskStatus | None = Query(default=None)) -> list[PRSTask]
         _ensure_seed_units()
         rows = _list_task_rows(status=status)
         return [_serialize_task(row) for row in rows]
-    except OperationalError:
+    except (OperationalError, RuntimeError):
         return _fallback_tasks(status)
 
 
@@ -355,7 +355,7 @@ def create_task(payload: PRSTaskCreate) -> PRSTask:
             )
             row = cursor.fetchone()
             return _serialize_task(row)
-    except OperationalError as exc:
+    except (OperationalError, RuntimeError) as exc:
         now = datetime.utcnow()
         fallback_task = PRSTask(
             id=f"offline-{uuid4()}",
@@ -404,7 +404,7 @@ def get_task(task_id: str) -> PRSTask:
             row = cursor.fetchone()
             if row:
                 return _serialize_task(row)
-    except OperationalError as exc:
+    except (OperationalError, RuntimeError) as exc:
         raise HTTPException(status_code=503, detail=f"Database unavailable: {exc}") from exc
     raise HTTPException(status_code=404, detail="Task not found")
 
@@ -478,7 +478,7 @@ def update_task(task_id: str, payload: PRSTaskCreate) -> PRSTask:
             )
             row = cursor.fetchone()
             return _serialize_task(row)
-    except OperationalError as exc:
+    except (OperationalError, RuntimeError) as exc:
         raise HTTPException(status_code=503, detail=f"Database unavailable: {exc}") from exc
 
 
@@ -490,7 +490,7 @@ def delete_task(task_id: str) -> None:
             deleted = cursor.fetchone()
             if not deleted:
                 raise HTTPException(status_code=404, detail="Task not found")
-    except OperationalError as exc:
+    except (OperationalError, RuntimeError) as exc:
         raise HTTPException(status_code=503, detail=f"Database unavailable: {exc}") from exc
 
 
@@ -499,7 +499,7 @@ def export_tasks(export_format: str, status: TaskStatus | None = Query(default=N
     try:
         _ensure_seed_units()
         rows = [_serialize_task(row) for row in _list_task_rows(status=status)]
-    except OperationalError:
+    except (OperationalError, RuntimeError):
         rows = _fallback_tasks(status)
     timestamp = date.today().isoformat()
 
