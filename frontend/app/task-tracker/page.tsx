@@ -927,7 +927,7 @@ export default function TaskTrackerPage() {
                   <Button type="button" size="sm" variant="ghost" onClick={() => closeMonthTab(month)}>
                     Close
                   </Button>
-                ) : null}
+                )}
               </div>
             ))}
             <div className="ml-2 flex items-center gap-2">
