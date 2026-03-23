@@ -47,7 +47,6 @@ export default function TaskTrackerPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
   const [customMonths, setCustomMonths] = useState<string[]>([]);
   const [closedMonths, setClosedMonths] = useState<string[]>([]);
-  const [monthActions, setMonthActions] = useState<Record<string, string>>({});
   const [newMonthInput, setNewMonthInput] = useState<string>(new Date().toISOString().slice(0, 7));
   const [editingMonth, setEditingMonth] = useState<string | null>(null);
   const [editMonthInput, setEditMonthInput] = useState<string>("");
@@ -234,16 +233,6 @@ export default function TaskTrackerPage() {
     }
 
     setError(`Month ${formatMonthLabel(month)} is closed. You can reopen it anytime below.`);
-  };
-
-  const handleMonthAction = (month: string, action: string) => {
-    if (action === "edit") {
-      startEditMonth(month);
-    }
-    if (action === "close") {
-      closeMonthTab(month);
-    }
-    setMonthActions((prev) => ({ ...prev, [month]: "" }));
   };
 
   const reopenMonthTab = (month: string) => {
@@ -897,42 +886,46 @@ export default function TaskTrackerPage() {
       <Card>
         <CardHeader>
           <CardTitle>Monthly Sheets</CardTitle>
-          <CardDescription>Create and switch unlimited month sheets (tabs at the bottom).</CardDescription>
+          <CardDescription>Pick a month, then manage that selected month (edit or close).</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap items-center gap-2">
-            {monthTabs.map((month) => (
-              <div key={month} className="flex items-center gap-1">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={selectedMonth === month ? "default" : "outline"}
-                  onClick={() => setSelectedMonth(month)}
-                >
-                  {formatMonthLabel(month)}
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex min-w-[220px] flex-col gap-1">
+              <span className="text-xs text-muted-foreground">Current open month</span>
+              <Select value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} className="h-9">
+                {monthTabs.map((month) => (
+                  <option key={month} value={month}>
+                    {formatMonthLabel(month)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {customMonths.includes(selectedMonth) ? (
+                <Button type="button" size="sm" variant="outline" onClick={() => startEditMonth(selectedMonth)}>
+                  Edit Selected
                 </Button>
-                <Select
-                  value={monthActions[month] ?? ""}
-                  onChange={(event) => handleMonthAction(month, event.target.value)}
-                  className="h-8 w-[110px] text-xs"
-                >
-                  <option value="" disabled>Actions</option>
-                  {customMonths.includes(month) ? <option value="edit">Edit</option> : null}
-                  <option value="close">Close</option>
-                </Select>
-              </div>
-            ))}
-            <div className="ml-2 flex items-center gap-2">
-              <Input
-                type="month"
-                value={newMonthInput}
-                onChange={(event) => setNewMonthInput(event.target.value)}
-                className="w-[170px]"
-                min="2000-01"
-              />
-              <Button type="button" size="sm" variant="outline" onClick={addMonthTab}>
-                Add Month
+              ) : null}
+              <Button type="button" size="sm" variant="outline" onClick={() => closeMonthTab(selectedMonth)}>
+                Close Selected
               </Button>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">Add month</span>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="month"
+                  value={newMonthInput}
+                  onChange={(event) => setNewMonthInput(event.target.value)}
+                  className="w-[170px]"
+                  min="2000-01"
+                />
+                <Button type="button" size="sm" variant="outline" onClick={addMonthTab}>
+                  Add Month
+                </Button>
+              </div>
             </div>
           </div>
           {editingMonth ? (
