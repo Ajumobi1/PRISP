@@ -118,13 +118,12 @@ export default function TaskTrackerPage() {
 
   const onAddTask = async () => {
     const normalizedTaskTitle = form.taskTitle.trim();
-    const normalizedDeliverable = form.deliverable.trim();
     const todayIso = new Date().toISOString().split("T")[0];
     const resolvedDateAssigned = form.dateAssigned || todayIso;
     const resolvedDueDate = form.dueDate || resolvedDateAssigned;
 
-    if (!normalizedTaskTitle || selectedAssignees.length === 0 || !normalizedDeliverable) {
-      setError("Task, Assignees, Priority, Status, and Deliverable are required.");
+    if (!normalizedTaskTitle || selectedAssignees.length === 0) {
+      setError("Task, Assignees, Priority, and Status are required.");
       return;
     }
 
@@ -146,7 +145,7 @@ export default function TaskTrackerPage() {
         dueDate: resolvedDueDate,
         status: form.status,
         priority: form.priority,
-        deliverable: normalizedDeliverable,
+        deliverable: "",
         checklist: form.checklist,
         remarks: form.remarks,
       });
@@ -264,7 +263,7 @@ export default function TaskTrackerPage() {
       <Card>
         <CardHeader>
           <CardTitle>Add New Task</CardTitle>
-          <CardDescription>Required: Task, Assignees, Status, Priority, Deliverable (+ upload files under Deliverable).</CardDescription>
+          <CardDescription>Required: Task, Assignees, Status, Priority. Upload files for deliverable is optional.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <Input
@@ -347,14 +346,6 @@ export default function TaskTrackerPage() {
 
           <div className="md:col-span-2 lg:col-span-2">
             <Input
-              placeholder="Deliverable (Required)"
-              value={form.deliverable}
-              onChange={(event) => setForm((p) => ({ ...p, deliverable: event.target.value }))}
-            />
-          </div>
-
-          <div className="md:col-span-2 lg:col-span-2">
-            <Input
               placeholder="Task Description (Optional)"
               value={form.taskDescription}
               onChange={(event) => setForm((p) => ({ ...p, taskDescription: event.target.value }))}
@@ -396,7 +387,7 @@ export default function TaskTrackerPage() {
           </div>
 
           <div className="lg:col-span-4">
-            <p className="mb-1 text-sm font-medium">Upload files for Deliverable</p>
+            <p className="mb-1 text-sm font-medium">Upload files for Deliverable (Optional)</p>
             <Input
               type="file"
               multiple
