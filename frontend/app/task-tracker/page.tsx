@@ -47,6 +47,7 @@ export default function TaskTrackerPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
   const [customMonths, setCustomMonths] = useState<string[]>([]);
   const [closedMonths, setClosedMonths] = useState<string[]>([]);
+  const [monthActions, setMonthActions] = useState<Record<string, string>>({});
   const [newMonthInput, setNewMonthInput] = useState<string>(new Date().toISOString().slice(0, 7));
   const [editingMonth, setEditingMonth] = useState<string | null>(null);
   const [editMonthInput, setEditMonthInput] = useState<string>("");
@@ -215,17 +216,6 @@ export default function TaskTrackerPage() {
     setError(null);
   };
 
-  const removeMonthTab = (month: string) => {
-    setCustomMonths((prev) => prev.filter((entry) => entry !== month));
-    if (selectedMonth === month) {
-      const fallback = monthTabs.find((entry) => entry !== month) ?? new Date().toISOString().slice(0, 7);
-      setSelectedMonth(fallback);
-    }
-    if (editingMonth === month) {
-      cancelEditMonth();
-    }
-  };
-
   const closeMonthTab = (month: string) => {
     const shouldClose = window.confirm("Are you sure you want to close the entire month? (Yes/No)");
     if (!shouldClose) {
@@ -244,6 +234,16 @@ export default function TaskTrackerPage() {
     }
 
     setError(`Month ${formatMonthLabel(month)} is closed. You can reopen it anytime below.`);
+  };
+
+  const handleMonthAction = (month: string, action: string) => {
+    if (action === "edit") {
+      startEditMonth(month);
+    }
+    if (action === "close") {
+      closeMonthTab(month);
+    }
+    setMonthActions((prev) => ({ ...prev, [month]: "" }));
   };
 
   const reopenMonthTab = (month: string) => {
@@ -911,23 +911,15 @@ export default function TaskTrackerPage() {
                 >
                   {formatMonthLabel(month)}
                 </Button>
-                {customMonths.includes(month) ? (
-                  <>
-                    <Button type="button" size="sm" variant="ghost" onClick={() => startEditMonth(month)}>
-                      Edit
-                    </Button>
-                    <Button type="button" size="sm" variant="ghost" onClick={() => closeMonthTab(month)}>
-                      Close
-                    </Button>
-                    <Button type="button" size="sm" variant="ghost" onClick={() => removeMonthTab(month)}>
-                      Remove
-                    </Button>
-                  </>
-                ) : (
-                  <Button type="button" size="sm" variant="ghost" onClick={() => closeMonthTab(month)}>
-                    Close
-                  </Button>
-                )}
+                <Select
+                  value={monthActions[month] ?? ""}
+                  onChange={(event) => handleMonthAction(month, event.target.value)}
+                  className="h-8 w-[110px] text-xs"
+                >
+                  <option value="" disabled>Actions</option>
+                  {customMonths.includes(month) ? <option value="edit">Edit</option> : null}
+                  <option value="close">Close</option>
+                </Select>
               </div>
             ))}
             <div className="ml-2 flex items-center gap-2">
