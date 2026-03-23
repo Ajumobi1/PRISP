@@ -46,7 +46,10 @@ export default function TaskTrackerPage() {
   const [tasks, setTasks] = useState<PRSTask[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
   const [customMonths, setCustomMonths] = useState<string[]>([]);
+  const [closedMonths, setClosedMonths] = useState<string[]>([]);
   const [newMonthInput, setNewMonthInput] = useState<string>(new Date().toISOString().slice(0, 7));
+  const [editingMonth, setEditingMonth] = useState<string | null>(null);
+  const [editMonthInput, setEditMonthInput] = useState<string>("");
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
@@ -88,16 +91,29 @@ export default function TaskTrackerPage() {
   const monthTabs = useMemo(() => {
     const fromTasks = tasks.map((task) => task.dateAssigned.slice(0, 7)).filter(Boolean);
     const merged = Array.from(new Set([...customMonths, ...fromTasks, selectedMonth]));
-    return merged.sort((a, b) => b.localeCompare(a));
-  }, [customMonths, tasks, selectedMonth]);
+    return merged
+      .filter((month) => !closedMonths.includes(month))
+      .sort((a, b) => b.localeCompare(a));
+  }, [customMonths, tasks, selectedMonth, closedMonths]);
+
+  const closedMonthTabs = useMemo(() => {
+    return [...closedMonths].sort((a, b) => b.localeCompare(a));
+  }, [closedMonths]);
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem("prisp.taskTracker.monthTabs");
+      const storedClosed = localStorage.getItem("prisp.taskTracker.closedMonths");
       if (stored) {
         const parsed = JSON.parse(stored) as string[];
         if (Array.isArray(parsed)) {
           setCustomMonths(parsed.filter((month) => /^\d{4}-\d{2}$/.test(month)));
+        }
+      }
+      if (storedClosed) {
+        const parsedClosed = JSON.parse(storedClosed) as string[];
+        if (Array.isArray(parsedClosed)) {
+          setClosedMonths(parsedClosed.filter((month) => /^\d{4}-\d{2}$/.test(month)));
         }
       }
     } catch {
@@ -132,6 +148,10 @@ export default function TaskTrackerPage() {
     localStorage.setItem("prisp.taskTracker.monthTabs", JSON.stringify(customMonths));
   }, [customMonths]);
 
+  useEffect(() => {
+    localStorage.setItem("prisp.taskTracker.closedMonths", JSON.stringify(closedMonths));
+  }, [closedMonths]);
+
   const getTaskKey = (task: PRSTask) => task.id ?? `sn-${task.serialNumber}`;
 
   const formatMonthLabel = (month: string) => {
@@ -148,8 +168,87 @@ export default function TaskTrackerPage() {
       setError("Select a valid month.");
       return;
     }
+    const [year] = newMonthInput.split("-");
+    if (Number(year) < 2000) {
+      setError("Month year must be 2000 or later.");
+      return;
+    }
     setCustomMonths((prev) => (prev.includes(newMonthInput) ? prev : [...prev, newMonthInput]));
+    setClosedMonths((prev) => prev.filter((month) => month !== newMonthInput));
     setSelectedMonth(newMonthInput);
+    setError(null);
+  };
+
+  const startEditMonth = (month: string) => {
+    setEditingMonth(month);
+    setEditMonthInput(month);
+    setError(null);
+  };
+
+  const cancelEditMonth = () => {
+    setEditingMonth(null);
+    setEditMonthInput("");
+  };
+
+  const saveEditMonth = () => {
+    if (!editingMonth) {
+      return;
+    }
+    if (!/^\d{4}-\d{2}$/.test(editMonthInput)) {
+      setError("Select a valid month.");
+      return;
+    }
+    const [year] = editMonthInput.split("-");
+    if (Number(year) < 2000) {
+      setError("Month year must be 2000 or later.");
+      return;
+    }
+    setCustomMonths((prev) => {
+      const withoutOld = prev.filter((month) => month !== editingMonth);
+      return withoutOld.includes(editMonthInput) ? withoutOld : [...withoutOld, editMonthInput];
+    });
+    if (selectedMonth === editingMonth) {
+      setSelectedMonth(editMonthInput);
+    }
+    setEditingMonth(null);
+    setEditMonthInput("");
+    setError(null);
+  };
+
+  const removeMonthTab = (month: string) => {
+    setCustomMonths((prev) => prev.filter((entry) => entry !== month));
+    if (selectedMonth === month) {
+      const fallback = monthTabs.find((entry) => entry !== month) ?? new Date().toISOString().slice(0, 7);
+      setSelectedMonth(fallback);
+    }
+    if (editingMonth === month) {
+      cancelEditMonth();
+    }
+  };
+
+  const closeMonthTab = (month: string) => {
+    const shouldClose = window.confirm("Are you sure you want to close the entire month? (Yes/No)");
+    if (!shouldClose) {
+      return;
+    }
+
+    setClosedMonths((prev) => (prev.includes(month) ? prev : [...prev, month]));
+
+    if (selectedMonth === month) {
+      const fallback = monthTabs.find((entry) => entry !== month) ?? new Date().toISOString().slice(0, 7);
+      setSelectedMonth(fallback);
+    }
+
+    if (editingMonth === month) {
+      cancelEditMonth();
+    }
+
+    setError(`Month ${formatMonthLabel(month)} is closed. You can reopen it anytime below.`);
+  };
+
+  const reopenMonthTab = (month: string) => {
+    setClosedMonths((prev) => prev.filter((entry) => entry !== month));
+    setSelectedMonth(month);
     setError(null);
   };
 
@@ -803,15 +902,33 @@ export default function TaskTrackerPage() {
         <CardContent>
           <div className="flex flex-wrap items-center gap-2">
             {monthTabs.map((month) => (
-              <Button
-                key={month}
-                type="button"
-                size="sm"
-                variant={selectedMonth === month ? "default" : "outline"}
-                onClick={() => setSelectedMonth(month)}
-              >
-                {formatMonthLabel(month)}
-              </Button>
+              <div key={month} className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={selectedMonth === month ? "default" : "outline"}
+                  onClick={() => setSelectedMonth(month)}
+                >
+                  {formatMonthLabel(month)}
+                </Button>
+                {customMonths.includes(month) ? (
+                  <>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => startEditMonth(month)}>
+                      Edit
+                    </Button>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => closeMonthTab(month)}>
+                      Close
+                    </Button>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => removeMonthTab(month)}>
+                      Remove
+                    </Button>
+                  </>
+                ) : (
+                  <Button type="button" size="sm" variant="ghost" onClick={() => closeMonthTab(month)}>
+                    Close
+                  </Button>
+                ) : null}
+              </div>
             ))}
             <div className="ml-2 flex items-center gap-2">
               <Input
@@ -819,12 +936,46 @@ export default function TaskTrackerPage() {
                 value={newMonthInput}
                 onChange={(event) => setNewMonthInput(event.target.value)}
                 className="w-[170px]"
+                min="2000-01"
               />
               <Button type="button" size="sm" variant="outline" onClick={addMonthTab}>
                 Add Month
               </Button>
             </div>
           </div>
+          {editingMonth ? (
+            <div className="mt-3 flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Edit month:</span>
+              <Input
+                type="month"
+                value={editMonthInput}
+                onChange={(event) => setEditMonthInput(event.target.value)}
+                className="w-[170px]"
+                min="2000-01"
+              />
+              <Button type="button" size="sm" onClick={saveEditMonth}>Save Month</Button>
+              <Button type="button" size="sm" variant="outline" onClick={cancelEditMonth}>Cancel</Button>
+            </div>
+          ) : null}
+
+          {closedMonthTabs.length > 0 ? (
+            <div className="mt-3">
+              <p className="text-sm text-muted-foreground">Closed months (reopen anytime):</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {closedMonthTabs.map((month) => (
+                  <Button
+                    key={month}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => reopenMonthTab(month)}
+                  >
+                    Reopen {formatMonthLabel(month)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </main>
