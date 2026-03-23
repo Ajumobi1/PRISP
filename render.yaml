@@ -26,7 +26,7 @@ services:
     startCommand: npm run start -- --hostname 0.0.0.0 --port $PORT
     healthCheckPath: /
     envVars:
-      - key: NEXT_PUBLIC_API_BASE_URL
+      - key: BACKEND_API_BASE_URL
         value: https://prisp-backend.onrender.com/api/v1
       - key: PORT
         value: "10000"
