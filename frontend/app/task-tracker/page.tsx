@@ -21,12 +21,11 @@ import {
   updateTask,
   uploadTaskAttachments,
 } from "@/lib/api";
-import { PRSTask, TaskPriority, TaskStatus, statusColumns, UnitName } from "@/lib/task-types";
+import { PRSTask, TaskPriority, TaskStatus, statusColumns } from "@/lib/task-types";
 
 type ViewMode = "table" | "kanban";
 
 const priorities: TaskPriority[] = ["Urgent/High", "Medium", "Low"];
-const units: UnitName[] = ["Planning", "Research", "Statistics", "M&E"];
 
 const priorityClasses: Record<TaskPriority, string> = {
   "Urgent/High": "bg-red-100 text-red-700 border-red-200",
@@ -45,6 +44,9 @@ const statusVariant: Record<TaskStatus, "secondary" | "warning" | "success" | "d
 export default function TaskTrackerPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [tasks, setTasks] = useState<PRSTask[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
+  const [customMonths, setCustomMonths] = useState<string[]>([]);
+  const [newMonthInput, setNewMonthInput] = useState<string>(new Date().toISOString().slice(0, 7));
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
@@ -71,13 +73,37 @@ export default function TaskTrackerPage() {
   });
 
   const groupedByStatus = useMemo(() => {
+    const monthTasks = tasks.filter((task) => task.dateAssigned.startsWith(selectedMonth));
     return statusColumns.reduce<Record<TaskStatus, PRSTask[]>>((acc, status) => {
-      acc[status] = tasks.filter((task) => task.status === status);
+      acc[status] = monthTasks.filter((task) => task.status === status);
       return acc;
     }, {} as Record<TaskStatus, PRSTask[]>);
-  }, [tasks]);
+  }, [tasks, selectedMonth]);
+
+  const visibleTasks = useMemo(
+    () => tasks.filter((task) => task.dateAssigned.startsWith(selectedMonth)),
+    [tasks, selectedMonth]
+  );
+
+  const monthTabs = useMemo(() => {
+    const fromTasks = tasks.map((task) => task.dateAssigned.slice(0, 7)).filter(Boolean);
+    const merged = Array.from(new Set([...customMonths, ...fromTasks, selectedMonth]));
+    return merged.sort((a, b) => b.localeCompare(a));
+  }, [customMonths, tasks, selectedMonth]);
 
   useEffect(() => {
+    try {
+      const stored = localStorage.getItem("prisp.taskTracker.monthTabs");
+      if (stored) {
+        const parsed = JSON.parse(stored) as string[];
+        if (Array.isArray(parsed)) {
+          setCustomMonths(parsed.filter((month) => /^\d{4}-\d{2}$/.test(month)));
+        }
+      }
+    } catch {
+      // no-op
+    }
+
     const loadTasks = async () => {
       try {
         setError(null);
@@ -102,7 +128,30 @@ export default function TaskTrackerPage() {
     loadTasks();
   }, []);
 
+  useEffect(() => {
+    localStorage.setItem("prisp.taskTracker.monthTabs", JSON.stringify(customMonths));
+  }, [customMonths]);
+
   const getTaskKey = (task: PRSTask) => task.id ?? `sn-${task.serialNumber}`;
+
+  const formatMonthLabel = (month: string) => {
+    const [year, monthPart] = month.split("-");
+    const monthIndex = Number(monthPart) - 1;
+    const monthName = [
+      "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ][monthIndex] ?? monthPart;
+    return `${monthName} ${year}`;
+  };
+
+  const addMonthTab = () => {
+    if (!/^\d{4}-\d{2}$/.test(newMonthInput)) {
+      setError("Select a valid month.");
+      return;
+    }
+    setCustomMonths((prev) => (prev.includes(newMonthInput) ? prev : [...prev, newMonthInput]));
+    setSelectedMonth(newMonthInput);
+    setError(null);
+  };
 
   const addAssignee = () => {
     const candidate = assigneeInput.trim();
@@ -124,8 +173,8 @@ export default function TaskTrackerPage() {
 
   const onAddTask = async () => {
     const normalizedTaskTitle = form.taskTitle.trim();
-    const todayIso = new Date().toISOString().split("T")[0];
-    const resolvedDateAssigned = form.dateAssigned || todayIso;
+    const monthStartDefault = `${selectedMonth}-01`;
+    const resolvedDateAssigned = form.dateAssigned || monthStartDefault;
     const resolvedDueDate = form.dueDate || resolvedDateAssigned;
 
     if (!normalizedTaskTitle || selectedAssignees.length === 0) {
@@ -173,8 +222,8 @@ export default function TaskTrackerPage() {
         taskTitle: "",
         taskDescription: "",
         assignee: "",
-        dateAssigned: todayIso,
-        dueDate: todayIso,
+        dateAssigned: monthStartDefault,
+        dueDate: monthStartDefault,
         status: "Not Started",
         priority: "Medium",
         deliverable: "",
@@ -359,7 +408,9 @@ export default function TaskTrackerPage() {
       <Card>
         <CardHeader>
           <CardTitle>Add New Task</CardTitle>
-          <CardDescription>Required: Task, Assignees, Status, Priority. Upload files for deliverable is optional.</CardDescription>
+          <CardDescription>
+            Required: Task, Assignees, Status, Priority. Upload files for deliverable is optional. Current sheet: {formatMonthLabel(selectedMonth)}.
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <Input
@@ -514,7 +565,6 @@ export default function TaskTrackerPage() {
                 <TableRow>
                   <TableHead>S/N</TableHead>
                   <TableHead>Task</TableHead>
-                  <TableHead>Unit</TableHead>
                   <TableHead>Task Description</TableHead>
                   <TableHead>Responsible Person(s)</TableHead>
                   <TableHead>Start Date</TableHead>
@@ -528,7 +578,7 @@ export default function TaskTrackerPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {tasks.map((task) => (
+                {visibleTasks.map((task) => (
                   <TableRow key={task.serialNumber}>
                     <TableCell className="font-medium">{task.serialNumber}</TableCell>
                     <TableCell className="min-w-[180px]">
@@ -539,20 +589,6 @@ export default function TaskTrackerPage() {
                         />
                       ) : (
                         task.taskTitle
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {editingTaskId === getTaskKey(task) && editDraft ? (
-                        <Select
-                          value={editDraft.unit}
-                          onChange={(event) => setEditDraft({ ...editDraft, unit: event.target.value as UnitName })}
-                        >
-                          {units.map((unit) => (
-                            <option key={unit} value={unit}>{unit}</option>
-                          ))}
-                        </Select>
-                      ) : (
-                        task.unit
                       )}
                     </TableCell>
                     <TableCell className="min-w-[350px]">
@@ -749,7 +785,7 @@ export default function TaskTrackerPage() {
                     </div>
                     <p className="text-xs text-muted-foreground">{task.taskTitle}</p>
                     <p className="text-sm font-medium leading-snug">{task.taskDescription}</p>
-                    <p className="mt-2 text-xs text-muted-foreground">{task.unit} • {task.assignee}</p>
+                    <p className="mt-2 text-xs text-muted-foreground">{task.assignee}</p>
                     <p className="mt-1 text-xs text-muted-foreground">End: {task.dueDate}</p>
                   </div>
                 ))}
@@ -758,6 +794,39 @@ export default function TaskTrackerPage() {
           ))}
         </div>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Monthly Sheets</CardTitle>
+          <CardDescription>Create and switch unlimited month sheets (tabs at the bottom).</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-center gap-2">
+            {monthTabs.map((month) => (
+              <Button
+                key={month}
+                type="button"
+                size="sm"
+                variant={selectedMonth === month ? "default" : "outline"}
+                onClick={() => setSelectedMonth(month)}
+              >
+                {formatMonthLabel(month)}
+              </Button>
+            ))}
+            <div className="ml-2 flex items-center gap-2">
+              <Input
+                type="month"
+                value={newMonthInput}
+                onChange={(event) => setNewMonthInput(event.target.value)}
+                className="w-[170px]"
+              />
+              <Button type="button" size="sm" variant="outline" onClick={addMonthTab}>
+                Add Month
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </main>
   );
 }
