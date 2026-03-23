@@ -14,6 +14,10 @@ load_dotenv()
 DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/prisp?connect_timeout=3"
 
 
+def _running_on_render() -> bool:
+    return bool(os.getenv("RENDER") or os.getenv("RENDER_SERVICE_ID") or os.getenv("RENDER_GIT_COMMIT"))
+
+
 def _build_database_url_from_parts() -> str | None:
     host = os.getenv("PGHOST") or os.getenv("POSTGRES_HOST")
     port = os.getenv("PGPORT") or os.getenv("POSTGRES_PORT") or "5432"
@@ -28,14 +32,26 @@ def _build_database_url_from_parts() -> str | None:
 
 
 def _pick_database_url() -> str:
-    return (
+    explicit_url = (
         os.getenv("DATABASE_URL")
         or os.getenv("POSTGRES_URL")
         or os.getenv("POSTGRES_INTERNAL_URL")
         or os.getenv("POSTGRESQL_URL")
-        or _build_database_url_from_parts()
-        or DATABASE_URL
     )
+
+    if explicit_url:
+        return explicit_url
+
+    parts_url = _build_database_url_from_parts()
+    if parts_url:
+        return parts_url
+
+    if _running_on_render():
+        raise RuntimeError(
+            "Database configuration missing on Render. Set DATABASE_URL (or POSTGRES_URL/POSTGRES_INTERNAL_URL)."
+        )
+
+    return DATABASE_URL
 
 
 def _with_param(url: str, key: str, value: str) -> str:
