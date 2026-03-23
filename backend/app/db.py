@@ -40,6 +40,10 @@ def _pick_database_url() -> str:
     )
 
     if explicit_url:
+        if _running_on_render() and any(token in explicit_url for token in ["localhost", "127.0.0.1", "::1"]):
+            raise RuntimeError(
+                "Invalid DATABASE_URL on Render: localhost cannot be used. Set DATABASE_URL to your managed Postgres URL."
+            )
         return explicit_url
 
     parts_url = _build_database_url_from_parts()
