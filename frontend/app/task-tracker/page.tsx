@@ -20,11 +20,10 @@ import {
   TaskAttachment,
   uploadTaskAttachments,
 } from "@/lib/api";
-import { PRSTask, TaskPriority, TaskStatus, UnitName, statusColumns } from "@/lib/task-types";
+import { PRSTask, TaskPriority, TaskStatus, statusColumns } from "@/lib/task-types";
 
 type ViewMode = "table" | "kanban";
 
-const units: UnitName[] = ["Planning", "Research", "Statistics", "M&E"];
 const priorities: TaskPriority[] = ["Urgent/High", "Medium", "Low"];
 
 const priorityClasses: Record<TaskPriority, string> = {
@@ -118,7 +117,21 @@ export default function TaskTrackerPage() {
   };
 
   const onAddTask = async () => {
-    if (!form.taskTitle || !form.taskDescription || selectedAssignees.length === 0 || !form.dateAssigned || !form.dueDate) return;
+    const normalizedTaskTitle = form.taskTitle.trim();
+    const normalizedDeliverable = form.deliverable.trim();
+    const todayIso = new Date().toISOString().split("T")[0];
+    const resolvedDateAssigned = form.dateAssigned || todayIso;
+    const resolvedDueDate = form.dueDate || resolvedDateAssigned;
+
+    if (!normalizedTaskTitle || selectedAssignees.length === 0 || !normalizedDeliverable) {
+      setError("Task, Assignees, Priority, Status, and Deliverable are required.");
+      return;
+    }
+
+    if (resolvedDueDate < resolvedDateAssigned) {
+      setError("Due Date cannot be earlier than Date Assigned.");
+      return;
+    }
 
     try {
       setIsBusy(true);
@@ -126,14 +139,14 @@ export default function TaskTrackerPage() {
       const joinedAssignees = selectedAssignees.join(", ");
       const createdTask = await createTask({
         unit: form.unit,
-        taskTitle: form.taskTitle,
-        taskDescription: form.taskDescription,
+        taskTitle: normalizedTaskTitle,
+        taskDescription: form.taskDescription.trim() || normalizedTaskTitle,
         assignee: joinedAssignees,
-        dateAssigned: form.dateAssigned,
-        dueDate: form.dueDate,
+        dateAssigned: resolvedDateAssigned,
+        dueDate: resolvedDueDate,
         status: form.status,
         priority: form.priority,
-        deliverable: form.deliverable,
+        deliverable: normalizedDeliverable,
         checklist: form.checklist,
         remarks: form.remarks,
       });
@@ -155,8 +168,8 @@ export default function TaskTrackerPage() {
         taskTitle: "",
         taskDescription: "",
         assignee: "",
-        dateAssigned: "",
-        dueDate: "",
+        dateAssigned: todayIso,
+        dueDate: todayIso,
         status: "Not Started",
         priority: "Medium",
         deliverable: "",
@@ -164,6 +177,7 @@ export default function TaskTrackerPage() {
         remarks: "",
       });
       setSelectedAssignees([]);
+      setAssigneeInput("");
       setUploadQueue([]);
     } catch {
       setError("Failed to create task. Check backend/database connection.");
@@ -250,16 +264,14 @@ export default function TaskTrackerPage() {
       <Card>
         <CardHeader>
           <CardTitle>Add New Task</CardTitle>
-          <CardDescription>Fill all mandatory fields to create a new row in the tracker.</CardDescription>
+          <CardDescription>Required: Task, Assignees, Status, Priority, Deliverable (+ upload files under Deliverable).</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-          <Select value={form.unit} onChange={(event) => setForm((p) => ({ ...p, unit: event.target.value as UnitName }))}>
-            {units.map((unit) => (
-              <option key={unit} value={unit}>
-                {unit}
-              </option>
-            ))}
-          </Select>
+          <Input
+            placeholder="Task (Required)"
+            value={form.taskTitle}
+            onChange={(event) => setForm((p) => ({ ...p, taskTitle: event.target.value }))}
+          />
 
           <div className="rounded-md border border-input bg-white px-3 py-2">
             <p className="text-sm font-medium">
@@ -269,7 +281,7 @@ export default function TaskTrackerPage() {
             </p>
             <div className="mt-2 flex items-center gap-2">
               <Input
-                placeholder="Add assignee name"
+                placeholder="Add assignee name (Required)"
                 value={assigneeInput}
                 onChange={(event) => setAssigneeInput(event.target.value)}
                 onKeyDown={(event) => {
@@ -311,18 +323,6 @@ export default function TaskTrackerPage() {
             </div>
           </div>
 
-          <Input
-            type="date"
-            value={form.dateAssigned}
-            onChange={(event) => setForm((p) => ({ ...p, dateAssigned: event.target.value }))}
-          />
-
-          <Input
-            type="date"
-            value={form.dueDate}
-            onChange={(event) => setForm((p) => ({ ...p, dueDate: event.target.value }))}
-          />
-
           <Select
             value={form.status}
             onChange={(event) => setForm((p) => ({ ...p, status: event.target.value as TaskStatus }))}
@@ -345,17 +345,17 @@ export default function TaskTrackerPage() {
             ))}
           </Select>
 
-          <div className="md:col-span-1 lg:col-span-1">
+          <div className="md:col-span-2 lg:col-span-2">
             <Input
-              placeholder="Task"
-              value={form.taskTitle}
-              onChange={(event) => setForm((p) => ({ ...p, taskTitle: event.target.value }))}
+              placeholder="Deliverable (Required)"
+              value={form.deliverable}
+              onChange={(event) => setForm((p) => ({ ...p, deliverable: event.target.value }))}
             />
           </div>
 
-          <div className="md:col-span-1 lg:col-span-1">
+          <div className="md:col-span-2 lg:col-span-2">
             <Input
-              placeholder="Task Description"
+              placeholder="Task Description (Optional)"
               value={form.taskDescription}
               onChange={(event) => setForm((p) => ({ ...p, taskDescription: event.target.value }))}
             />
@@ -363,15 +363,25 @@ export default function TaskTrackerPage() {
 
           <div className="md:col-span-2 lg:col-span-2">
             <Input
-              placeholder="Deliverable"
-              value={form.deliverable}
-              onChange={(event) => setForm((p) => ({ ...p, deliverable: event.target.value }))}
+              type="date"
+              value={form.dateAssigned}
+              onChange={(event) => setForm((p) => ({ ...p, dateAssigned: event.target.value }))}
             />
+            <p className="mt-1 text-xs text-muted-foreground">Date Assigned (Optional)</p>
+          </div>
+
+          <div className="md:col-span-2 lg:col-span-2">
+            <Input
+              type="date"
+              value={form.dueDate}
+              onChange={(event) => setForm((p) => ({ ...p, dueDate: event.target.value }))}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">Due Date (Optional)</p>
           </div>
 
           <div className="lg:col-span-4">
             <Textarea
-              placeholder="Checklist"
+              placeholder="Checklist (Optional)"
               value={form.checklist}
               onChange={(event) => setForm((p) => ({ ...p, checklist: event.target.value }))}
             />
@@ -379,13 +389,14 @@ export default function TaskTrackerPage() {
 
           <div className="lg:col-span-4">
             <Textarea
-              placeholder="Remarks / Comments"
+              placeholder="Notes / Remarks (Optional)"
               value={form.remarks}
               onChange={(event) => setForm((p) => ({ ...p, remarks: event.target.value }))}
             />
           </div>
 
           <div className="lg:col-span-4">
+            <p className="mb-1 text-sm font-medium">Upload files for Deliverable</p>
             <Input
               type="file"
               multiple
