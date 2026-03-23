@@ -61,12 +61,15 @@ export default function TaskTrackerPage() {
   const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null);
   const [form, setForm] = useState<Omit<PRSTask, "serialNumber">>({
     unit: "Planning",
+    taskTitle: "",
     taskDescription: "",
     assignee: "",
     dateAssigned: "",
     dueDate: "",
     status: "Not Started",
     priority: "Medium",
+    deliverable: "",
+    checklist: "",
     remarks: "",
   });
 
@@ -111,7 +114,7 @@ export default function TaskTrackerPage() {
   };
 
   const onAddTask = async () => {
-    if (!form.taskDescription || selectedAssignees.length === 0 || !form.dateAssigned || !form.dueDate) return;
+    if (!form.taskTitle || !form.taskDescription || selectedAssignees.length === 0 || !form.dateAssigned || !form.dueDate) return;
 
     try {
       setIsBusy(true);
@@ -119,12 +122,15 @@ export default function TaskTrackerPage() {
       const joinedAssignees = selectedAssignees.join(", ");
       const createdTask = await createTask({
         unit: form.unit,
+        taskTitle: form.taskTitle,
         taskDescription: form.taskDescription,
         assignee: joinedAssignees,
         dateAssigned: form.dateAssigned,
         dueDate: form.dueDate,
         status: form.status,
         priority: form.priority,
+        deliverable: form.deliverable,
+        checklist: form.checklist,
         remarks: form.remarks,
       });
       setTasks((prev) => [...prev, createdTask]);
@@ -142,12 +148,15 @@ export default function TaskTrackerPage() {
       }
       setForm({
         unit: "Planning",
+        taskTitle: "",
         taskDescription: "",
         assignee: "",
         dateAssigned: "",
         dueDate: "",
         status: "Not Started",
         priority: "Medium",
+        deliverable: "",
+        checklist: "",
         remarks: "",
       });
       setSelectedAssignees([]);
@@ -302,11 +311,35 @@ export default function TaskTrackerPage() {
             ))}
           </Select>
 
-          <div className="md:col-span-2 lg:col-span-2">
+          <div className="md:col-span-1 lg:col-span-1">
+            <Input
+              placeholder="Task"
+              value={form.taskTitle}
+              onChange={(event) => setForm((p) => ({ ...p, taskTitle: event.target.value }))}
+            />
+          </div>
+
+          <div className="md:col-span-1 lg:col-span-1">
             <Input
               placeholder="Task Description"
               value={form.taskDescription}
               onChange={(event) => setForm((p) => ({ ...p, taskDescription: event.target.value }))}
+            />
+          </div>
+
+          <div className="md:col-span-2 lg:col-span-2">
+            <Input
+              placeholder="Deliverable"
+              value={form.deliverable}
+              onChange={(event) => setForm((p) => ({ ...p, deliverable: event.target.value }))}
+            />
+          </div>
+
+          <div className="lg:col-span-4">
+            <Textarea
+              placeholder="Checklist"
+              value={form.checklist}
+              onChange={(event) => setForm((p) => ({ ...p, checklist: event.target.value }))}
             />
           </div>
 
@@ -348,21 +381,25 @@ export default function TaskTrackerPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>S/N</TableHead>
+                  <TableHead>Task</TableHead>
                   <TableHead>Unit</TableHead>
                   <TableHead>Task Description</TableHead>
-                  <TableHead>Assignee</TableHead>
+                  <TableHead>Responsible Person(s)</TableHead>
                   <TableHead>Date Assigned</TableHead>
                   <TableHead>Due Date</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Priority</TableHead>
+                  <TableHead>Deliverable</TableHead>
+                  <TableHead>Checklist</TableHead>
                   <TableHead>Uploaded Files</TableHead>
-                  <TableHead>Remarks/Comments</TableHead>
+                  <TableHead>Notes</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {tasks.map((task) => (
                   <TableRow key={task.serialNumber}>
                     <TableCell className="font-medium">{task.serialNumber}</TableCell>
+                    <TableCell className="min-w-[180px]">{task.taskTitle}</TableCell>
                     <TableCell>{task.unit}</TableCell>
                     <TableCell className="min-w-[350px]">{task.taskDescription}</TableCell>
                     <TableCell>{task.assignee}</TableCell>
@@ -376,6 +413,8 @@ export default function TaskTrackerPage() {
                         {task.priority}
                       </span>
                     </TableCell>
+                    <TableCell className="min-w-[180px] text-muted-foreground">{task.deliverable || "—"}</TableCell>
+                    <TableCell className="min-w-[240px] text-muted-foreground">{task.checklist || "—"}</TableCell>
                     <TableCell className="min-w-[220px] text-muted-foreground">
                       {(taskUploads[getTaskKey(task)] ?? []).length > 0 ? (
                         <div className="space-y-1">
@@ -428,6 +467,7 @@ export default function TaskTrackerPage() {
                         {task.priority}
                       </span>
                     </div>
+                    <p className="text-xs text-muted-foreground">{task.taskTitle}</p>
                     <p className="text-sm font-medium leading-snug">{task.taskDescription}</p>
                     <p className="mt-2 text-xs text-muted-foreground">{task.unit} • {task.assignee}</p>
                     <p className="mt-1 text-xs text-muted-foreground">Due: {task.dueDate}</p>

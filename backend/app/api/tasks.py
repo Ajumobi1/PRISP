@@ -65,6 +65,18 @@ def _ensure_task_attachments_table() -> None:
         )
 
 
+def _ensure_task_columns() -> None:
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            """
+            ALTER TABLE prs_tasks
+            ADD COLUMN IF NOT EXISTS task_title VARCHAR(255) NOT NULL DEFAULT 'Task',
+            ADD COLUMN IF NOT EXISTS deliverable TEXT,
+            ADD COLUMN IF NOT EXISTS checklist TEXT
+            """
+        )
+
+
 def _safe_file_name(raw_name: str) -> str:
     base_name = Path(raw_name).name
     safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", base_name).strip("._")
@@ -117,12 +129,15 @@ def _serialize_task(row: dict) -> PRSTask:
         id=str(row["id"]),
         serial_number=row["serial_number"],
         unit=row["unit_name"],
+        task_title=row.get("task_title") or "Task",
         task_description=row["task_description"],
         assignee=row["assignee_name"],
         date_assigned=row["date_assigned"],
         due_date=row["due_date"],
         status=TaskStatus(row["status"]),
         priority=TaskPriority(row["priority"]),
+        deliverable=row.get("deliverable"),
+        checklist=row.get("checklist"),
         remarks=row["remarks"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -135,12 +150,15 @@ def _list_task_rows(status: TaskStatus | None = None) -> list[dict]:
             t.id,
             t.serial_number,
             u.unit_name,
+            t.task_title,
             t.task_description,
             s.full_name AS assignee_name,
             t.date_assigned,
             t.due_date,
             t.status,
             t.priority,
+            t.deliverable,
+            t.checklist,
             t.remarks,
             t.created_at,
             t.updated_at
@@ -166,13 +184,16 @@ def _export_csv(rows: list[PRSTask]) -> bytes:
     writer.writerow(
         [
             "S/N",
+            "Task",
             "Unit",
             "Task Description",
-            "Assignee",
+            "Responsible Person(s)",
             "Date Assigned",
             "Due Date",
             "Status",
             "Priority",
+            "Deliverable",
+            "Checklist",
             "Remarks/Comments",
         ]
     )
@@ -180,6 +201,7 @@ def _export_csv(rows: list[PRSTask]) -> bytes:
         writer.writerow(
             [
                 task.serial_number,
+                task.task_title,
                 task.unit,
                 task.task_description,
                 task.assignee,
@@ -187,6 +209,8 @@ def _export_csv(rows: list[PRSTask]) -> bytes:
                 task.due_date.isoformat(),
                 task.status.value,
                 task.priority.value,
+                task.deliverable or "",
+                task.checklist or "",
                 task.remarks or "",
             ]
         )
@@ -199,13 +223,16 @@ def _export_xlsx(rows: list[PRSTask]) -> bytes:
     sheet.title = "PRS Tasks"
     headers = [
         "S/N",
+        "Task",
         "Unit",
         "Task Description",
-        "Assignee",
+        "Responsible Person(s)",
         "Date Assigned",
         "Due Date",
         "Status",
         "Priority",
+        "Deliverable",
+        "Checklist",
         "Remarks/Comments",
     ]
     sheet.append(headers)
@@ -214,6 +241,7 @@ def _export_xlsx(rows: list[PRSTask]) -> bytes:
         sheet.append(
             [
                 task.serial_number,
+                task.task_title,
                 task.unit,
                 task.task_description,
                 task.assignee,
@@ -221,6 +249,8 @@ def _export_xlsx(rows: list[PRSTask]) -> bytes:
                 task.due_date.isoformat(),
                 task.status.value,
                 task.priority.value,
+                task.deliverable or "",
+                task.checklist or "",
                 task.remarks or "",
             ]
         )
@@ -240,6 +270,7 @@ def _export_pdf(rows: list[PRSTask]) -> bytes:
     table_data = [
         [
             "S/N",
+            "Task",
             "Unit",
             "Task Description",
             "Assignee",
@@ -247,6 +278,8 @@ def _export_pdf(rows: list[PRSTask]) -> bytes:
             "Due Date",
             "Status",
             "Priority",
+            "Deliverable",
+            "Checklist",
             "Remarks/Comments",
         ]
     ]
@@ -254,6 +287,7 @@ def _export_pdf(rows: list[PRSTask]) -> bytes:
         table_data.append(
             [
                 str(task.serial_number),
+                task.task_title,
                 task.unit,
                 task.task_description,
                 task.assignee,
@@ -261,6 +295,8 @@ def _export_pdf(rows: list[PRSTask]) -> bytes:
                 task.due_date.isoformat(),
                 task.status.value,
                 task.priority.value,
+                (task.deliverable or "")[:80],
+                (task.checklist or "")[:80],
                 (task.remarks or "")[:80],
             ]
         )
@@ -287,6 +323,7 @@ def _export_pdf(rows: list[PRSTask]) -> bytes:
 def list_tasks(status: TaskStatus | None = Query(default=None)) -> list[PRSTask]:
     try:
         _ensure_seed_units()
+        _ensure_task_columns()
         rows = _list_task_rows(status=status)
         return [_serialize_task(row) for row in rows]
     except (OperationalError, RuntimeError):
@@ -297,6 +334,7 @@ def list_tasks(status: TaskStatus | None = Query(default=None)) -> list[PRSTask]
 def create_task(payload: PRSTaskCreate) -> PRSTask:
     try:
         _ensure_seed_units()
+        _ensure_task_columns()
 
         with get_db_cursor() as cursor:
             cursor.execute(
@@ -314,25 +352,31 @@ def create_task(payload: PRSTaskCreate) -> PRSTask:
                 """
                 INSERT INTO prs_tasks (
                     unit_id,
+                    task_title,
                     task_description,
                     assignee_id,
                     date_assigned,
                     due_date,
                     status,
                     priority,
+                    deliverable,
+                    checklist,
                     remarks
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
                 (
                     unit_id,
+                    payload.task_title,
                     payload.task_description,
                     assignee_id,
                     payload.date_assigned,
                     payload.due_date,
                     payload.status.value,
                     payload.priority.value,
+                    payload.deliverable,
+                    payload.checklist,
                     payload.remarks,
                 ),
             )
@@ -344,12 +388,15 @@ def create_task(payload: PRSTaskCreate) -> PRSTask:
                     t.id,
                     t.serial_number,
                     u.unit_name,
+                    t.task_title,
                     t.task_description,
                     s.full_name AS assignee_name,
                     t.date_assigned,
                     t.due_date,
                     t.status,
                     t.priority,
+                    t.deliverable,
+                    t.checklist,
                     t.remarks,
                     t.created_at,
                     t.updated_at
@@ -368,12 +415,15 @@ def create_task(payload: PRSTaskCreate) -> PRSTask:
             id=f"offline-{uuid4()}",
             serial_number=len(_fallback_tasks()) + 1,
             unit=payload.unit,
+            task_title=payload.task_title,
             task_description=payload.task_description,
             assignee=payload.assignee,
             date_assigned=payload.date_assigned,
             due_date=payload.due_date,
             status=payload.status,
             priority=payload.priority,
+            deliverable=payload.deliverable,
+            checklist=payload.checklist,
             remarks=(payload.remarks or "") + " [offline mode: DB unavailable]",
             created_at=now,
             updated_at=now,
@@ -538,6 +588,7 @@ def delete_task_attachment(task_id: str, attachment_id: str) -> None:
 @router.get("/{task_id}", response_model=PRSTask)
 def get_task(task_id: str) -> PRSTask:
     try:
+        _ensure_task_columns()
         with get_db_cursor() as cursor:
             cursor.execute(
                 """
@@ -545,12 +596,15 @@ def get_task(task_id: str) -> PRSTask:
                     t.id,
                     t.serial_number,
                     u.unit_name,
+                    t.task_title,
                     t.task_description,
                     s.full_name AS assignee_name,
                     t.date_assigned,
                     t.due_date,
                     t.status,
                     t.priority,
+                    t.deliverable,
+                    t.checklist,
                     t.remarks,
                     t.created_at,
                     t.updated_at
@@ -573,6 +627,7 @@ def get_task(task_id: str) -> PRSTask:
 def update_task(task_id: str, payload: PRSTaskCreate) -> PRSTask:
     try:
         _ensure_seed_units()
+        _ensure_task_columns()
 
         with get_db_cursor() as cursor:
             cursor.execute("SELECT id FROM prs_units WHERE unit_name = %s LIMIT 1", (payload.unit,))
@@ -587,12 +642,15 @@ def update_task(task_id: str, payload: PRSTaskCreate) -> PRSTask:
                 """
                 UPDATE prs_tasks
                 SET unit_id = %s,
+                    task_title = %s,
                     task_description = %s,
                     assignee_id = %s,
                     date_assigned = %s,
                     due_date = %s,
                     status = %s,
                     priority = %s,
+                    deliverable = %s,
+                    checklist = %s,
                     remarks = %s,
                     updated_at = NOW()
                 WHERE id = %s
@@ -600,12 +658,15 @@ def update_task(task_id: str, payload: PRSTaskCreate) -> PRSTask:
                 """,
                 (
                     unit_id,
+                    payload.task_title,
                     payload.task_description,
                     assignee_id,
                     payload.date_assigned,
                     payload.due_date,
                     payload.status.value,
                     payload.priority.value,
+                    payload.deliverable,
+                    payload.checklist,
                     payload.remarks,
                     task_id,
                 ),
@@ -620,12 +681,15 @@ def update_task(task_id: str, payload: PRSTaskCreate) -> PRSTask:
                     t.id,
                     t.serial_number,
                     u.unit_name,
+                    t.task_title,
                     t.task_description,
                     s.full_name AS assignee_name,
                     t.date_assigned,
                     t.due_date,
                     t.status,
                     t.priority,
+                    t.deliverable,
+                    t.checklist,
                     t.remarks,
                     t.created_at,
                     t.updated_at
@@ -667,6 +731,7 @@ def delete_task(task_id: str) -> None:
 def export_tasks(export_format: str, status: TaskStatus | None = Query(default=None)) -> StreamingResponse:
     try:
         _ensure_seed_units()
+        _ensure_task_columns()
         rows = [_serialize_task(row) for row in _list_task_rows(status=status)]
     except (OperationalError, RuntimeError):
         rows = _fallback_tasks(status)

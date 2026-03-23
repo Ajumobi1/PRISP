@@ -21,12 +21,15 @@ class TaskPriority(str, Enum):
 
 class PRSTaskBase(BaseModel):
     unit: str = Field(min_length=2)
+    task_title: str = Field(min_length=2)
     task_description: str = Field(min_length=5)
     assignee: str = Field(min_length=2)
     date_assigned: date
     due_date: date
     status: TaskStatus
     priority: TaskPriority
+    deliverable: Optional[str] = None
+    checklist: Optional[str] = None
     remarks: Optional[str] = None
 
 

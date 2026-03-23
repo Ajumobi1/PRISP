@@ -13,12 +13,15 @@ export interface PRSTask {
   id?: string;
   serialNumber: number;
   unit: UnitName;
+  taskTitle: string;
   taskDescription: string;
   assignee: string;
   dateAssigned: string;
   dueDate: string;
   status: TaskStatus;
   priority: TaskPriority;
+  deliverable: string;
+  checklist: string;
   remarks: string;
 }
 

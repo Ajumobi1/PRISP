@@ -6,12 +6,15 @@ interface ApiTask {
   id: string;
   serial_number: number;
   unit: string;
+  task_title: string;
   task_description: string;
   assignee: string;
   date_assigned: string;
   due_date: string;
   status: TaskStatus;
   priority: TaskPriority;
+  deliverable: string | null;
+  checklist: string | null;
   remarks: string | null;
   created_at: string;
   updated_at: string;
@@ -37,12 +40,15 @@ export interface TaskAttachment {
 
 export interface CreateTaskPayload {
   unit: UnitName;
+  taskTitle: string;
   taskDescription: string;
   assignee: string;
   dateAssigned: string;
   dueDate: string;
   status: TaskStatus;
   priority: TaskPriority;
+  deliverable: string;
+  checklist: string;
   remarks: string;
 }
 
@@ -62,12 +68,15 @@ function toUiTask(task: ApiTask): PRSTask {
     id: task.id,
     serialNumber: task.serial_number,
     unit: task.unit as UnitName,
+    taskTitle: task.task_title,
     taskDescription: task.task_description,
     assignee: task.assignee,
     dateAssigned: task.date_assigned,
     dueDate: task.due_date,
     status: task.status,
     priority: task.priority,
+    deliverable: task.deliverable ?? "",
+    checklist: task.checklist ?? "",
     remarks: task.remarks ?? "",
   };
 }
@@ -87,12 +96,15 @@ export async function createTask(payload: CreateTaskPayload): Promise<PRSTask> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       unit: payload.unit,
+      task_title: payload.taskTitle,
       task_description: payload.taskDescription,
       assignee: payload.assignee,
       date_assigned: payload.dateAssigned,
       due_date: payload.dueDate,
       status: payload.status,
       priority: payload.priority,
+      deliverable: payload.deliverable,
+      checklist: payload.checklist,
       remarks: payload.remarks,
     }),
   });

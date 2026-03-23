@@ -77,3 +77,7 @@ Deploy frontend and backend as separate services on any platform that supports c
 - Set production frontend URL in backend `ALLOWED_ORIGINS`
 - Confirm uploads directory is writable by backend runtime
 
+### Full Deployment Guides
+
+See `docs/deploy.md` for complete copy-paste setup for Railway, Render, Fly.io, and VPS.
+
