@@ -18,13 +18,15 @@ import {
   fetchTasks,
   getTaskAttachmentDownloadUrl,
   TaskAttachment,
+  updateTask,
   uploadTaskAttachments,
 } from "@/lib/api";
-import { PRSTask, TaskPriority, TaskStatus, statusColumns } from "@/lib/task-types";
+import { PRSTask, TaskPriority, TaskStatus, statusColumns, UnitName } from "@/lib/task-types";
 
 type ViewMode = "table" | "kanban";
 
 const priorities: TaskPriority[] = ["Urgent/High", "Medium", "Low"];
+const units: UnitName[] = ["Planning", "Research", "Statistics", "M&E"];
 
 const priorityClasses: Record<TaskPriority, string> = {
   "Urgent/High": "bg-red-100 text-red-700 border-red-200",
@@ -49,6 +51,10 @@ export default function TaskTrackerPage() {
   const [assigneeInput, setAssigneeInput] = useState("");
   const [uploadQueue, setUploadQueue] = useState<File[]>([]);
   const [taskUploads, setTaskUploads] = useState<Record<string, TaskAttachment[]>>({});
+  const [uploadQueueByTask, setUploadQueueByTask] = useState<Record<string, File[]>>({});
+  const [uploadingTaskId, setUploadingTaskId] = useState<string | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<PRSTask | null>(null);
   const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null);
   const [form, setForm] = useState<Omit<PRSTask, "serialNumber">>({
     unit: "Planning",
@@ -128,7 +134,7 @@ export default function TaskTrackerPage() {
     }
 
     if (resolvedDueDate < resolvedDateAssigned) {
-      setError("Due Date cannot be earlier than Date Assigned.");
+      setError("End Date cannot be earlier than Start Date.");
       return;
     }
 
@@ -178,8 +184,9 @@ export default function TaskTrackerPage() {
       setSelectedAssignees([]);
       setAssigneeInput("");
       setUploadQueue([]);
-    } catch {
-      setError("Failed to create task. Check backend/database connection.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to create task.";
+      setError(message);
     } finally {
       setIsBusy(false);
     }
@@ -221,6 +228,95 @@ export default function TaskTrackerPage() {
       setError("Failed to delete attachment.");
     } finally {
       setDeletingAttachmentId(null);
+    }
+  };
+
+  const beginEditTask = (task: PRSTask) => {
+    setEditingTaskId(getTaskKey(task));
+    setEditDraft({ ...task });
+    setError(null);
+  };
+
+  const cancelEditTask = () => {
+    setEditingTaskId(null);
+    setEditDraft(null);
+  };
+
+  const saveEditTask = async (task: PRSTask) => {
+    if (!task.id || !editDraft) {
+      return;
+    }
+
+    const normalizedTitle = editDraft.taskTitle.trim();
+    const normalizedAssignee = editDraft.assignee.trim();
+    const todayIso = new Date().toISOString().split("T")[0];
+    const resolvedStart = editDraft.dateAssigned || todayIso;
+    const resolvedEnd = editDraft.dueDate || resolvedStart;
+
+    if (!normalizedTitle || !normalizedAssignee) {
+      setError("Task and Assignees are required while editing.");
+      return;
+    }
+
+    if (resolvedEnd < resolvedStart) {
+      setError("End Date cannot be earlier than Start Date.");
+      return;
+    }
+
+    try {
+      setIsBusy(true);
+      setError(null);
+      const updated = await updateTask(task.id, {
+        unit: editDraft.unit,
+        taskTitle: normalizedTitle,
+        taskDescription: editDraft.taskDescription.trim() || normalizedTitle,
+        assignee: normalizedAssignee,
+        dateAssigned: resolvedStart,
+        dueDate: resolvedEnd,
+        status: editDraft.status,
+        priority: editDraft.priority,
+        deliverable: editDraft.deliverable,
+        checklist: editDraft.checklist,
+        remarks: editDraft.remarks,
+      });
+
+      setTasks((prev) => prev.map((item) => (getTaskKey(item) === getTaskKey(task) ? updated : item)));
+      setEditingTaskId(null);
+      setEditDraft(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update task.";
+      setError(message);
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const uploadAttachmentsLater = async (task: PRSTask) => {
+    if (!task.id) {
+      return;
+    }
+
+    const taskKey = getTaskKey(task);
+    const queued = uploadQueueByTask[taskKey] ?? [];
+    if (queued.length === 0) {
+      setError("Select one or more files before uploading.");
+      return;
+    }
+
+    try {
+      setUploadingTaskId(taskKey);
+      setError(null);
+      const uploaded = await uploadTaskAttachments(task.id, queued);
+      setTaskUploads((prev) => ({
+        ...prev,
+        [taskKey]: [...uploaded, ...(prev[taskKey] ?? [])],
+      }));
+      setUploadQueueByTask((prev) => ({ ...prev, [taskKey]: [] }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to upload task attachments.";
+      setError(message);
+    } finally {
+      setUploadingTaskId(null);
     }
   };
 
@@ -358,7 +454,7 @@ export default function TaskTrackerPage() {
               value={form.dateAssigned}
               onChange={(event) => setForm((p) => ({ ...p, dateAssigned: event.target.value }))}
             />
-            <p className="mt-1 text-xs text-muted-foreground">Date Assigned (Optional)</p>
+            <p className="mt-1 text-xs text-muted-foreground">Start Date (Optional)</p>
           </div>
 
           <div className="md:col-span-2 lg:col-span-2">
@@ -367,7 +463,7 @@ export default function TaskTrackerPage() {
               value={form.dueDate}
               onChange={(event) => setForm((p) => ({ ...p, dueDate: event.target.value }))}
             />
-            <p className="mt-1 text-xs text-muted-foreground">Due Date (Optional)</p>
+            <p className="mt-1 text-xs text-muted-foreground">End Date (Optional)</p>
           </div>
 
           <div className="lg:col-span-4">
@@ -421,8 +517,8 @@ export default function TaskTrackerPage() {
                   <TableHead>Unit</TableHead>
                   <TableHead>Task Description</TableHead>
                   <TableHead>Responsible Person(s)</TableHead>
-                  <TableHead>Date Assigned</TableHead>
-                  <TableHead>Due Date</TableHead>
+                  <TableHead>Start Date</TableHead>
+                  <TableHead>End Date</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Priority</TableHead>
                   <TableHead>Deliverable</TableHead>
@@ -435,22 +531,122 @@ export default function TaskTrackerPage() {
                 {tasks.map((task) => (
                   <TableRow key={task.serialNumber}>
                     <TableCell className="font-medium">{task.serialNumber}</TableCell>
-                    <TableCell className="min-w-[180px]">{task.taskTitle}</TableCell>
-                    <TableCell>{task.unit}</TableCell>
-                    <TableCell className="min-w-[350px]">{task.taskDescription}</TableCell>
-                    <TableCell>{task.assignee}</TableCell>
-                    <TableCell>{task.dateAssigned}</TableCell>
-                    <TableCell>{task.dueDate}</TableCell>
-                    <TableCell>
-                      <Badge variant={statusVariant[task.status]}>{task.status}</Badge>
+                    <TableCell className="min-w-[180px]">
+                      {editingTaskId === getTaskKey(task) && editDraft ? (
+                        <Input
+                          value={editDraft.taskTitle}
+                          onChange={(event) => setEditDraft({ ...editDraft, taskTitle: event.target.value })}
+                        />
+                      ) : (
+                        task.taskTitle
+                      )}
                     </TableCell>
                     <TableCell>
-                      <span className={`rounded-full border px-2 py-1 text-xs font-medium ${priorityClasses[task.priority]}`}>
-                        {task.priority}
-                      </span>
+                      {editingTaskId === getTaskKey(task) && editDraft ? (
+                        <Select
+                          value={editDraft.unit}
+                          onChange={(event) => setEditDraft({ ...editDraft, unit: event.target.value as UnitName })}
+                        >
+                          {units.map((unit) => (
+                            <option key={unit} value={unit}>{unit}</option>
+                          ))}
+                        </Select>
+                      ) : (
+                        task.unit
+                      )}
                     </TableCell>
-                    <TableCell className="min-w-[180px] text-muted-foreground">{task.deliverable || "—"}</TableCell>
-                    <TableCell className="min-w-[240px] text-muted-foreground">{task.checklist || "—"}</TableCell>
+                    <TableCell className="min-w-[350px]">
+                      {editingTaskId === getTaskKey(task) && editDraft ? (
+                        <Input
+                          value={editDraft.taskDescription}
+                          onChange={(event) => setEditDraft({ ...editDraft, taskDescription: event.target.value })}
+                        />
+                      ) : (
+                        task.taskDescription
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingTaskId === getTaskKey(task) && editDraft ? (
+                        <Input
+                          value={editDraft.assignee}
+                          onChange={(event) => setEditDraft({ ...editDraft, assignee: event.target.value })}
+                        />
+                      ) : (
+                        task.assignee
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingTaskId === getTaskKey(task) && editDraft ? (
+                        <Input
+                          type="date"
+                          value={editDraft.dateAssigned}
+                          onChange={(event) => setEditDraft({ ...editDraft, dateAssigned: event.target.value })}
+                        />
+                      ) : (
+                        task.dateAssigned
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingTaskId === getTaskKey(task) && editDraft ? (
+                        <Input
+                          type="date"
+                          value={editDraft.dueDate}
+                          onChange={(event) => setEditDraft({ ...editDraft, dueDate: event.target.value })}
+                        />
+                      ) : (
+                        task.dueDate
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingTaskId === getTaskKey(task) && editDraft ? (
+                        <Select
+                          value={editDraft.status}
+                          onChange={(event) => setEditDraft({ ...editDraft, status: event.target.value as TaskStatus })}
+                        >
+                          {statusColumns.map((status) => (
+                            <option key={status} value={status}>{status}</option>
+                          ))}
+                        </Select>
+                      ) : (
+                        <Badge variant={statusVariant[task.status]}>{task.status}</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingTaskId === getTaskKey(task) && editDraft ? (
+                        <Select
+                          value={editDraft.priority}
+                          onChange={(event) => setEditDraft({ ...editDraft, priority: event.target.value as TaskPriority })}
+                        >
+                          {priorities.map((priority) => (
+                            <option key={priority} value={priority}>{priority}</option>
+                          ))}
+                        </Select>
+                      ) : (
+                        <span className={`rounded-full border px-2 py-1 text-xs font-medium ${priorityClasses[task.priority]}`}>
+                          {task.priority}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="min-w-[180px] text-muted-foreground">
+                      {editingTaskId === getTaskKey(task) && editDraft ? (
+                        <Input
+                          value={editDraft.deliverable}
+                          onChange={(event) => setEditDraft({ ...editDraft, deliverable: event.target.value })}
+                        />
+                      ) : (
+                        task.deliverable || "—"
+                      )}
+                    </TableCell>
+                    <TableCell className="min-w-[240px] text-muted-foreground">
+                      {editingTaskId === getTaskKey(task) && editDraft ? (
+                        <Textarea
+                          value={editDraft.checklist}
+                          onChange={(event) => setEditDraft({ ...editDraft, checklist: event.target.value })}
+                        />
+                      ) : (
+                        task.checklist || "—"
+                      )}
+                    </TableCell>
                     <TableCell className="min-w-[220px] text-muted-foreground">
                       {(taskUploads[getTaskKey(task)] ?? []).length > 0 ? (
                         <div className="space-y-1">
@@ -478,8 +674,56 @@ export default function TaskTrackerPage() {
                       ) : (
                         "—"
                       )}
+                      {task.id ? (
+                        <div className="mt-2 space-y-1">
+                          <Input
+                            type="file"
+                            multiple
+                            onChange={(event) =>
+                              setUploadQueueByTask((prev) => ({
+                                ...prev,
+                                [getTaskKey(task)]: Array.from(event.target.files ?? []),
+                              }))
+                            }
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={uploadingTaskId === getTaskKey(task)}
+                            onClick={() => uploadAttachmentsLater(task)}
+                          >
+                            {uploadingTaskId === getTaskKey(task) ? "Uploading..." : "Upload Later"}
+                          </Button>
+                        </div>
+                      ) : null}
                     </TableCell>
-                    <TableCell className="min-w-[280px] text-muted-foreground">{task.remarks}</TableCell>
+                    <TableCell className="min-w-[280px] text-muted-foreground">
+                      {editingTaskId === getTaskKey(task) && editDraft ? (
+                        <Textarea
+                          value={editDraft.remarks}
+                          onChange={(event) => setEditDraft({ ...editDraft, remarks: event.target.value })}
+                        />
+                      ) : (
+                        task.remarks
+                      )}
+                      <div className="mt-2 flex gap-2">
+                        {editingTaskId === getTaskKey(task) ? (
+                          <>
+                            <Button type="button" size="sm" onClick={() => saveEditTask(task)} disabled={isBusy}>
+                              Save
+                            </Button>
+                            <Button type="button" size="sm" variant="outline" onClick={cancelEditTask} disabled={isBusy}>
+                              Cancel
+                            </Button>
+                          </>
+                        ) : (
+                          <Button type="button" size="sm" variant="outline" onClick={() => beginEditTask(task)}>
+                            Edit
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -506,7 +750,7 @@ export default function TaskTrackerPage() {
                     <p className="text-xs text-muted-foreground">{task.taskTitle}</p>
                     <p className="text-sm font-medium leading-snug">{task.taskDescription}</p>
                     <p className="mt-2 text-xs text-muted-foreground">{task.unit} • {task.assignee}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Due: {task.dueDate}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">End: {task.dueDate}</p>
                   </div>
                 ))}
               </CardContent>

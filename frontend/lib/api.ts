@@ -52,6 +52,26 @@ export interface CreateTaskPayload {
   remarks: string;
 }
 
+async function getApiErrorMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const body = await response.json();
+      if (body && typeof body.detail === "string" && body.detail.trim()) {
+        return body.detail;
+      }
+    } else {
+      const text = await response.text();
+      if (text.trim()) {
+        return text.trim();
+      }
+    }
+  } catch {
+    return fallback;
+  }
+  return fallback;
+}
+
 function toUiAttachment(attachment: ApiTaskAttachment): TaskAttachment {
   return {
     id: attachment.id,
@@ -110,7 +130,34 @@ export async function createTask(payload: CreateTaskPayload): Promise<PRSTask> {
   });
 
   if (!response.ok) {
-    throw new Error("Failed to create task");
+    throw new Error(await getApiErrorMessage(response, "Failed to create task"));
+  }
+
+  const data = (await response.json()) as ApiTask;
+  return toUiTask(data);
+}
+
+export async function updateTask(taskId: string, payload: CreateTaskPayload): Promise<PRSTask> {
+  const response = await fetch(`${API_BASE}/tasks/${taskId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      unit: payload.unit,
+      task_title: payload.taskTitle,
+      task_description: payload.taskDescription,
+      assignee: payload.assignee,
+      date_assigned: payload.dateAssigned,
+      due_date: payload.dueDate,
+      status: payload.status,
+      priority: payload.priority,
+      deliverable: payload.deliverable,
+      checklist: payload.checklist,
+      remarks: payload.remarks,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, "Failed to update task"));
   }
 
   const data = (await response.json()) as ApiTask;
@@ -148,7 +195,7 @@ export async function uploadTaskAttachments(taskId: string, files: File[]): Prom
   });
 
   if (!response.ok) {
-    throw new Error("Failed to upload task attachments");
+    throw new Error(await getApiErrorMessage(response, "Failed to upload task attachments"));
   }
 
   const data = (await response.json()) as ApiTaskAttachment[];
@@ -161,7 +208,7 @@ export async function fetchTaskAttachments(taskId: string): Promise<TaskAttachme
     if (response.status === 404) {
       return [];
     }
-    throw new Error("Failed to fetch task attachments");
+    throw new Error(await getApiErrorMessage(response, "Failed to fetch task attachments"));
   }
 
   const data = (await response.json()) as ApiTaskAttachment[];
@@ -178,6 +225,6 @@ export async function deleteTaskAttachment(taskId: string, attachmentId: string)
   });
 
   if (!response.ok) {
-    throw new Error("Failed to delete task attachment");
+    throw new Error(await getApiErrorMessage(response, "Failed to delete task attachment"));
   }
 }
