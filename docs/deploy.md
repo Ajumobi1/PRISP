@@ -35,3 +35,9 @@ Then redeploy both services.
   - `python -m app.init_db && uvicorn ...`
 - Frontend uses rewrite proxy through `BACKEND_API_BASE_URL`.
 - Task attachments are stored on service disk; for long-term persistence across redeploys, move attachments to object storage (e.g., S3-compatible bucket).
+
+### Common Render Error Fixes
+
+- If you see `Could not open requirements file: requirements.txt`, your service is building from repo root.
+  - This repository blueprint already handles that by using `backend/requirements.txt` explicitly.
+- If Render selects Python `3.14.x`, this repo pins Python via `.python-version` to `3.12.7`.
