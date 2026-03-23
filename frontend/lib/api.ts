@@ -17,6 +17,24 @@ interface ApiTask {
   updated_at: string;
 }
 
+interface ApiTaskAttachment {
+  id: string;
+  task_id: string;
+  file_name: string;
+  content_type: string;
+  file_size: number;
+  uploaded_at: string;
+}
+
+export interface TaskAttachment {
+  id: string;
+  taskId: string;
+  fileName: string;
+  contentType: string;
+  fileSize: number;
+  uploadedAt: string;
+}
+
 export interface CreateTaskPayload {
   unit: UnitName;
   taskDescription: string;
@@ -26,6 +44,17 @@ export interface CreateTaskPayload {
   status: TaskStatus;
   priority: TaskPriority;
   remarks: string;
+}
+
+function toUiAttachment(attachment: ApiTaskAttachment): TaskAttachment {
+  return {
+    id: attachment.id,
+    taskId: attachment.task_id,
+    fileName: attachment.file_name,
+    contentType: attachment.content_type,
+    fileSize: attachment.file_size,
+    uploadedAt: attachment.uploaded_at,
+  };
 }
 
 function toUiTask(task: ApiTask): PRSTask {
@@ -95,4 +124,48 @@ export async function downloadTasks(format: "csv" | "xlsx" | "pdf"): Promise<voi
   anchor.click();
   document.body.removeChild(anchor);
   window.URL.revokeObjectURL(blobUrl);
+}
+
+export async function uploadTaskAttachments(taskId: string, files: File[]): Promise<TaskAttachment[]> {
+  const formData = new FormData();
+  files.forEach((file) => formData.append("files", file));
+
+  const response = await fetch(`${API_BASE}/tasks/${taskId}/attachments`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to upload task attachments");
+  }
+
+  const data = (await response.json()) as ApiTaskAttachment[];
+  return data.map(toUiAttachment);
+}
+
+export async function fetchTaskAttachments(taskId: string): Promise<TaskAttachment[]> {
+  const response = await fetch(`${API_BASE}/tasks/${taskId}/attachments`, { cache: "no-store" });
+  if (!response.ok) {
+    if (response.status === 404) {
+      return [];
+    }
+    throw new Error("Failed to fetch task attachments");
+  }
+
+  const data = (await response.json()) as ApiTaskAttachment[];
+  return data.map(toUiAttachment);
+}
+
+export function getTaskAttachmentDownloadUrl(taskId: string, attachmentId: string): string {
+  return `${API_BASE}/tasks/${taskId}/attachments/${attachmentId}`;
+}
+
+export async function deleteTaskAttachment(taskId: string, attachmentId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/tasks/${taskId}/attachments/${attachmentId}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to delete task attachment");
+  }
 }

@@ -10,13 +10,31 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { createTask, downloadTasks, fetchTasks } from "@/lib/api";
-import { PRSTask, TaskPriority, TaskStatus, UnitName, demoTasks, statusColumns } from "@/lib/task-types";
+import {
+  createTask,
+  deleteTaskAttachment,
+  downloadTasks,
+  fetchTaskAttachments,
+  fetchTasks,
+  getTaskAttachmentDownloadUrl,
+  TaskAttachment,
+  uploadTaskAttachments,
+} from "@/lib/api";
+import { PRSTask, TaskPriority, TaskStatus, UnitName, statusColumns } from "@/lib/task-types";
 
 type ViewMode = "table" | "kanban";
 
 const units: UnitName[] = ["Planning", "Research", "Statistics", "M&E"];
 const priorities: TaskPriority[] = ["Urgent/High", "Medium", "Low"];
+const assigneeOptions = [
+  "A. Olatunji",
+  "S. Balogun",
+  "R. Ajayi",
+  "M. Adeyemi",
+  "D. Ogunleye",
+  "K. Yusuf",
+  "F. Okafor",
+];
 
 const priorityClasses: Record<TaskPriority, string> = {
   "Urgent/High": "bg-red-100 text-red-700 border-red-200",
@@ -34,9 +52,13 @@ const statusVariant: Record<TaskStatus, "secondary" | "warning" | "success" | "d
 
 export default function TaskTrackerPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("table");
-  const [tasks, setTasks] = useState<PRSTask[]>(demoTasks);
+  const [tasks, setTasks] = useState<PRSTask[]>([]);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  const [uploadQueue, setUploadQueue] = useState<File[]>([]);
+  const [taskUploads, setTaskUploads] = useState<Record<string, TaskAttachment[]>>({});
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null);
   const [form, setForm] = useState<Omit<PRSTask, "serialNumber">>({
     unit: "Planning",
     taskDescription: "",
@@ -61,24 +83,44 @@ export default function TaskTrackerPage() {
         setError(null);
         const remoteTasks = await fetchTasks();
         setTasks(remoteTasks);
+        const attachmentPairs = await Promise.all(
+          remoteTasks.map(async (task) => {
+            const taskKey = getTaskKey(task);
+            if (!task.id) {
+              return [taskKey, []] as const;
+            }
+            const attachments = await fetchTaskAttachments(task.id);
+            return [taskKey, attachments] as const;
+          })
+        );
+        setTaskUploads(Object.fromEntries(attachmentPairs));
       } catch {
-        setError("Unable to reach backend API. Showing local sample rows.");
+        setError("Unable to reach backend API.");
       }
     };
 
     loadTasks();
   }, []);
 
+  const getTaskKey = (task: PRSTask) => task.id ?? `sn-${task.serialNumber}`;
+
+  const toggleAssignee = (assignee: string) => {
+    setSelectedAssignees((prev) =>
+      prev.includes(assignee) ? prev.filter((item) => item !== assignee) : [...prev, assignee]
+    );
+  };
+
   const onAddTask = async () => {
-    if (!form.taskDescription || !form.assignee || !form.dateAssigned || !form.dueDate) return;
+    if (!form.taskDescription || selectedAssignees.length === 0 || !form.dateAssigned || !form.dueDate) return;
 
     try {
       setIsBusy(true);
       setError(null);
+      const joinedAssignees = selectedAssignees.join(", ");
       const createdTask = await createTask({
         unit: form.unit,
         taskDescription: form.taskDescription,
-        assignee: form.assignee,
+        assignee: joinedAssignees,
         dateAssigned: form.dateAssigned,
         dueDate: form.dueDate,
         status: form.status,
@@ -86,6 +128,18 @@ export default function TaskTrackerPage() {
         remarks: form.remarks,
       });
       setTasks((prev) => [...prev, createdTask]);
+      if (uploadQueue.length > 0 && createdTask.id) {
+        const uploadedAttachments = await uploadTaskAttachments(createdTask.id, uploadQueue);
+        setTaskUploads((prev) => ({
+          ...prev,
+          [getTaskKey(createdTask)]: uploadedAttachments,
+        }));
+      } else {
+        setTaskUploads((prev) => ({
+          ...prev,
+          [getTaskKey(createdTask)]: [],
+        }));
+      }
       setForm({
         unit: "Planning",
         taskDescription: "",
@@ -96,6 +150,8 @@ export default function TaskTrackerPage() {
         priority: "Medium",
         remarks: "",
       });
+      setSelectedAssignees([]);
+      setUploadQueue([]);
     } catch {
       setError("Failed to create task. Check backend/database connection.");
     } finally {
@@ -114,6 +170,31 @@ export default function TaskTrackerPage() {
       setError("Download failed. Confirm export endpoints are reachable.");
     } finally {
       setIsBusy(false);
+    }
+  };
+
+  const onDeleteAttachment = async (task: PRSTask, attachment: TaskAttachment) => {
+    if (!task.id) {
+      return;
+    }
+
+    const shouldDelete = window.confirm(`Remove attachment \"${attachment.fileName}\"?`);
+    if (!shouldDelete) {
+      return;
+    }
+
+    try {
+      setDeletingAttachmentId(attachment.id);
+      setError(null);
+      await deleteTaskAttachment(task.id, attachment.id);
+      setTaskUploads((prev) => ({
+        ...prev,
+        [getTaskKey(task)]: (prev[getTaskKey(task)] ?? []).filter((item) => item.id !== attachment.id),
+      }));
+    } catch {
+      setError("Failed to delete attachment.");
+    } finally {
+      setDeletingAttachmentId(null);
     }
   };
 
@@ -167,11 +248,25 @@ export default function TaskTrackerPage() {
             ))}
           </Select>
 
-          <Input
-            placeholder="Assignee"
-            value={form.assignee}
-            onChange={(event) => setForm((p) => ({ ...p, assignee: event.target.value }))}
-          />
+          <details className="rounded-md border border-input bg-white px-3 py-2">
+            <summary className="cursor-pointer text-sm font-medium">
+              {selectedAssignees.length > 0
+                ? `Assignees (${selectedAssignees.length})`
+                : "Select Assignees"}
+            </summary>
+            <div className="mt-2 max-h-44 space-y-2 overflow-auto pr-1 text-sm">
+              {assigneeOptions.map((assignee) => (
+                <label key={assignee} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedAssignees.includes(assignee)}
+                    onChange={() => toggleAssignee(assignee)}
+                  />
+                  <span>{assignee}</span>
+                </label>
+              ))}
+            </div>
+          </details>
 
           <Input
             type="date"
@@ -223,6 +318,19 @@ export default function TaskTrackerPage() {
             />
           </div>
 
+          <div className="lg:col-span-4">
+            <Input
+              type="file"
+              multiple
+              onChange={(event) => setUploadQueue(Array.from(event.target.files ?? []))}
+            />
+            {uploadQueue.length > 0 ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Files ready: {uploadQueue.map((file) => file.name).join(", ")}
+              </p>
+            ) : null}
+          </div>
+
           <div className="lg:col-span-4 flex justify-end">
             <Button onClick={onAddTask} disabled={isBusy}>{isBusy ? "Working..." : "Add Task Row"}</Button>
           </div>
@@ -247,6 +355,7 @@ export default function TaskTrackerPage() {
                   <TableHead>Due Date</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Priority</TableHead>
+                  <TableHead>Uploaded Files</TableHead>
                   <TableHead>Remarks/Comments</TableHead>
                 </TableRow>
               </TableHeader>
@@ -266,6 +375,34 @@ export default function TaskTrackerPage() {
                       <span className={`rounded-full border px-2 py-1 text-xs font-medium ${priorityClasses[task.priority]}`}>
                         {task.priority}
                       </span>
+                    </TableCell>
+                    <TableCell className="min-w-[220px] text-muted-foreground">
+                      {(taskUploads[getTaskKey(task)] ?? []).length > 0 ? (
+                        <div className="space-y-1">
+                          {(taskUploads[getTaskKey(task)] ?? []).map((attachment) => (
+                            <div key={attachment.id} className="flex items-center gap-2">
+                              <a
+                                href={getTaskAttachmentDownloadUrl(attachment.taskId, attachment.id)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="block text-xs text-blue-700 underline"
+                              >
+                                {attachment.fileName}
+                              </a>
+                              <button
+                                type="button"
+                                className="text-xs text-red-700 underline disabled:opacity-60"
+                                disabled={deletingAttachmentId === attachment.id}
+                                onClick={() => onDeleteAttachment(task, attachment)}
+                              >
+                                {deletingAttachmentId === attachment.id ? "Removing..." : "Remove"}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        "—"
+                      )}
                     </TableCell>
                     <TableCell className="min-w-[280px] text-muted-foreground">{task.remarks}</TableCell>
                   </TableRow>

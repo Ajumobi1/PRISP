@@ -1,0 +1,14 @@
+{
+  "python.analysis.exclude": [
+    "**/.venv/**",
+    "**/site-packages/**"
+  ],
+  "search.exclude": {
+    "**/.venv": true,
+    "**/site-packages": true
+  },
+  "files.watcherExclude": {
+    "**/.venv/**": true,
+    "**/site-packages/**": true
+  }
+}

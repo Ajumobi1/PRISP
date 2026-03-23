@@ -1,33 +1,13 @@
-# PRISP Data Dictionary (Initial)
+# Unit Task Tracker Data Dictionary
 
-## PRS Unit Task Tracker
+## Core Tables
 
-- `prs_units`: Master list of PRS units (Planning, Research, Statistics, M&E).
-- `staff_members`: Staff profiles and unit mapping.
-- `prs_tasks`: Core spreadsheet-equivalent table with serial number, unit, assignee, dates, status, priority, and remarks.
-- `task_comments`: Internal notes/bottlenecks linked to each task.
-- `task_status_history`: Auditable timeline of status transitions.
+- `prs_units`: Master list of units (Planning, Research, Statistics, M&E).
+- `staff_members`: Staff records used for assignee identity and unit linkage.
+- `prs_tasks`: Main tracker table containing serial number, unit, assignee, dates, status, priority, and remarks.
 
-## UHC Strategy Dashboard
+## Supporting Tables
 
-- `lgas`: LGA master table for heatmap dimensions.
-- `uhc_targets`: Yearly target vs. actual enrollee progress per LGA.
-
-## Monthly Capitation Space
-
-- `capitation_cycles`: Monthly capitation run metadata and totals.
-- `capitation_payments`: Facility-level payment line items per cycle.
-
-## Facility Gateway
-
-- `facilities`: Registered hospitals/providers.
-- `facility_monthly_reports`: Service utilization, encounters, and disease surveillance submissions.
-
-## Change of Facility (CoF)
-
-- `beneficiaries`: Enrollee records and active facility.
-- `cof_requests`: Transfer workflow (submitted -> review -> approved/rejected).
-
-## Reporting / Exports
-
-- `module_exports`: Stores generated report metadata for PDF, Excel, and CSV downloads.
+- `task_comments`: Optional comments linked to each task.
+- `task_status_history`: Audit log of task status transitions.
+- `task_attachments`: Uploaded file metadata for each task (name, content type, size, storage name, upload time).

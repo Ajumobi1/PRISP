@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ODCHC PRISP",
-  description: "PRS Intelligence & Strategy Portal",
+  title: "PRS Unit Task Tracker",
+  description: "Unit Task Tracker",
   icons: {
     icon: "/favicon.svg",
   },

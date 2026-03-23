@@ -1,11 +1,13 @@
 import csv
 import io
+import re
 from datetime import date, datetime
+from pathlib import Path
 from typing import List
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse, StreamingResponse
 from openpyxl import Workbook
 from psycopg import OperationalError
 from reportlab.lib import colors
@@ -14,51 +16,18 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from app.db import get_db_cursor
-from app.models.task import PRSTask, PRSTaskCreate, TaskPriority, TaskStatus
+from app.models.task import PRSTask, PRSTaskCreate, TaskAttachment, TaskPriority, TaskStatus
 
 
 router = APIRouter(prefix="/tasks", tags=["PRS Task Tracker"])
 
 DEFAULT_UNITS = ["Planning", "Research", "Statistics", "M&E"]
 FALLBACK_CREATED_TASKS: list[PRSTask] = []
-
-
-def _demo_tasks() -> list[PRSTask]:
-    now = datetime.utcnow()
-    return [
-        PRSTask(
-            id="demo-task-1",
-            serial_number=1,
-            unit="Planning",
-            task_description="Review monthly enrollment trend by LGA",
-            assignee="PRS Unit Head",
-            date_assigned=date.today(),
-            due_date=date.today(),
-            status=TaskStatus.IN_PROGRESS,
-            priority=TaskPriority.MEDIUM,
-            remarks="Operating in fallback mode while database reconnects",
-            created_at=now,
-            updated_at=now,
-        ),
-        PRSTask(
-            id="demo-task-2",
-            serial_number=2,
-            unit="Statistics",
-            task_description="Validate capitation variance report",
-            assignee="Data Analyst",
-            date_assigned=date.today(),
-            due_date=date.today(),
-            status=TaskStatus.AWAITING_REVIEW,
-            priority=TaskPriority.HIGH,
-            remarks="Temporary sample row",
-            created_at=now,
-            updated_at=now,
-        ),
-    ]
+TASK_UPLOADS_DIR = Path(__file__).resolve().parents[2] / "uploads" / "tasks"
 
 
 def _fallback_tasks(status: TaskStatus | None = None) -> list[PRSTask]:
-    tasks = _demo_tasks() + FALLBACK_CREATED_TASKS
+    tasks = FALLBACK_CREATED_TASKS
     if status is None:
         return tasks
     return [task for task in tasks if task.status == status]
@@ -77,6 +46,44 @@ def _ensure_seed_units() -> None:
             ON CONFLICT (unit_name) DO NOTHING
             """
         )
+
+
+def _ensure_task_attachments_table() -> None:
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS task_attachments (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                task_id UUID NOT NULL REFERENCES prs_tasks(id) ON DELETE CASCADE,
+                file_name VARCHAR(255) NOT NULL,
+                storage_name VARCHAR(255) NOT NULL,
+                content_type VARCHAR(150) NOT NULL DEFAULT 'application/octet-stream',
+                file_size BIGINT NOT NULL,
+                uploaded_at TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+            """
+        )
+
+
+def _safe_file_name(raw_name: str) -> str:
+    base_name = Path(raw_name).name
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", base_name).strip("._")
+    return safe_name or f"attachment_{uuid4().hex}"
+
+
+def _task_upload_dir(task_id: str) -> Path:
+    return TASK_UPLOADS_DIR / task_id
+
+
+def _serialize_attachment(row: dict) -> TaskAttachment:
+    return TaskAttachment(
+        id=str(row["id"]),
+        task_id=str(row["task_id"]),
+        file_name=row["file_name"],
+        content_type=row["content_type"],
+        file_size=int(row["file_size"]),
+        uploaded_at=row["uploaded_at"],
+    )
 
 
 def _get_or_create_assignee(cursor, assignee_name: str, unit_id: str) -> str:
@@ -375,6 +382,159 @@ def create_task(payload: PRSTaskCreate) -> PRSTask:
         return fallback_task
 
 
+@router.post("/{task_id}/attachments", response_model=List[TaskAttachment], status_code=201)
+async def upload_task_attachments(task_id: str, files: list[UploadFile] = File(...)) -> list[TaskAttachment]:
+    if not files:
+        raise HTTPException(status_code=400, detail="No files provided")
+
+    try:
+        _ensure_task_attachments_table()
+
+        with get_db_cursor() as cursor:
+            cursor.execute("SELECT id FROM prs_tasks WHERE id = %s", (task_id,))
+            task = cursor.fetchone()
+            if not task:
+                raise HTTPException(status_code=404, detail="Task not found")
+
+            upload_dir = _task_upload_dir(task_id)
+            upload_dir.mkdir(parents=True, exist_ok=True)
+
+            created_rows: list[dict] = []
+            for incoming_file in files:
+                original_name = _safe_file_name(incoming_file.filename or "uploaded_file")
+                storage_name = f"{uuid4().hex}_{original_name}"
+                destination = upload_dir / storage_name
+
+                file_bytes = await incoming_file.read()
+                destination.write_bytes(file_bytes)
+
+                cursor.execute(
+                    """
+                    INSERT INTO task_attachments (task_id, file_name, storage_name, content_type, file_size)
+                    VALUES (%s, %s, %s, %s, %s)
+                    RETURNING id, task_id, file_name, content_type, file_size, uploaded_at
+                    """,
+                    (
+                        task_id,
+                        original_name,
+                        storage_name,
+                        incoming_file.content_type or "application/octet-stream",
+                        len(file_bytes),
+                    ),
+                )
+                inserted = cursor.fetchone()
+                if inserted:
+                    created_rows.append(inserted)
+
+        return [_serialize_attachment(row) for row in created_rows]
+    except HTTPException:
+        raise
+    except (OperationalError, RuntimeError) as exc:
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {exc}") from exc
+
+
+@router.get("/{task_id}/attachments", response_model=List[TaskAttachment])
+def list_task_attachments(task_id: str) -> list[TaskAttachment]:
+    try:
+        _ensure_task_attachments_table()
+
+        with get_db_cursor() as cursor:
+            cursor.execute("SELECT id FROM prs_tasks WHERE id = %s", (task_id,))
+            task = cursor.fetchone()
+            if not task:
+                raise HTTPException(status_code=404, detail="Task not found")
+
+            cursor.execute(
+                """
+                SELECT id, task_id, file_name, content_type, file_size, uploaded_at
+                FROM task_attachments
+                WHERE task_id = %s
+                ORDER BY uploaded_at DESC
+                """,
+                (task_id,),
+            )
+            rows = cursor.fetchall()
+            return [_serialize_attachment(row) for row in rows]
+    except HTTPException:
+        raise
+    except (OperationalError, RuntimeError) as exc:
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {exc}") from exc
+
+
+@router.get("/{task_id}/attachments/{attachment_id}")
+def download_task_attachment(task_id: str, attachment_id: str):
+    try:
+        _ensure_task_attachments_table()
+
+        with get_db_cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, task_id, file_name, storage_name, content_type
+                FROM task_attachments
+                WHERE id = %s AND task_id = %s
+                """,
+                (attachment_id, task_id),
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Attachment not found")
+
+        file_path = _task_upload_dir(task_id) / row["storage_name"]
+        if not file_path.exists() or not file_path.is_file():
+            raise HTTPException(status_code=404, detail="Attachment file missing")
+
+        return FileResponse(
+            path=str(file_path),
+            media_type=row["content_type"] or "application/octet-stream",
+            filename=row["file_name"],
+        )
+    except HTTPException:
+        raise
+    except (OperationalError, RuntimeError) as exc:
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {exc}") from exc
+
+
+@router.delete("/{task_id}/attachments/{attachment_id}", status_code=204)
+def delete_task_attachment(task_id: str, attachment_id: str) -> None:
+    try:
+        _ensure_task_attachments_table()
+
+        with get_db_cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT storage_name
+                FROM task_attachments
+                WHERE id = %s AND task_id = %s
+                """,
+                (attachment_id, task_id),
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Attachment not found")
+
+            storage_name = row["storage_name"]
+
+            cursor.execute(
+                """
+                DELETE FROM task_attachments
+                WHERE id = %s AND task_id = %s
+                """,
+                (attachment_id, task_id),
+            )
+
+        file_path = _task_upload_dir(task_id) / storage_name
+        if file_path.exists() and file_path.is_file():
+            file_path.unlink(missing_ok=True)
+
+        upload_dir = _task_upload_dir(task_id)
+        if upload_dir.exists() and upload_dir.is_dir() and not any(upload_dir.iterdir()):
+            upload_dir.rmdir()
+    except HTTPException:
+        raise
+    except (OperationalError, RuntimeError) as exc:
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {exc}") from exc
+
+
 @router.get("/{task_id}", response_model=PRSTask)
 def get_task(task_id: str) -> PRSTask:
     try:
@@ -485,11 +645,20 @@ def update_task(task_id: str, payload: PRSTaskCreate) -> PRSTask:
 @router.delete("/{task_id}", status_code=204)
 def delete_task(task_id: str) -> None:
     try:
+        _ensure_task_attachments_table()
+
         with get_db_cursor() as cursor:
             cursor.execute("DELETE FROM prs_tasks WHERE id = %s RETURNING id", (task_id,))
             deleted = cursor.fetchone()
             if not deleted:
                 raise HTTPException(status_code=404, detail="Task not found")
+
+        upload_dir = _task_upload_dir(task_id)
+        if upload_dir.exists() and upload_dir.is_dir():
+            for child in upload_dir.iterdir():
+                if child.is_file():
+                    child.unlink(missing_ok=True)
+            upload_dir.rmdir()
     except (OperationalError, RuntimeError) as exc:
         raise HTTPException(status_code=503, detail=f"Database unavailable: {exc}") from exc
 

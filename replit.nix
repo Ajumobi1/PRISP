@@ -1,7 +1,0 @@
-{ pkgs }: {
-  deps = [
-    pkgs.nodejs_20
-    pkgs.python312Full
-    pkgs.postgresql
-  ];
-}

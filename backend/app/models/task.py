@@ -41,3 +41,12 @@ class PRSTask(PRSTaskBase):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class TaskAttachment(BaseModel):
+    id: str
+    task_id: str
+    file_name: str
+    content_type: str
+    file_size: int
+    uploaded_at: datetime
