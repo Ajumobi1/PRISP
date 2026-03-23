@@ -102,9 +102,15 @@ function toUiTask(task: ApiTask): PRSTask {
 }
 
 export async function fetchTasks(): Promise<PRSTask[]> {
-  const response = await fetch(`${API_BASE}/tasks`, { cache: "no-store" });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/tasks`, { cache: "no-store" });
+  } catch {
+    throw new Error("Cannot reach backend service. Confirm backend is running and reachable.");
+  }
+
   if (!response.ok) {
-    throw new Error("Failed to fetch tasks");
+    throw new Error(await getApiErrorMessage(response, "Failed to fetch tasks"));
   }
   const data = (await response.json()) as ApiTask[];
   return data.map(toUiTask);

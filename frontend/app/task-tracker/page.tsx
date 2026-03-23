@@ -136,8 +136,9 @@ export default function TaskTrackerPage() {
           })
         );
         setTaskUploads(Object.fromEntries(attachmentPairs));
-      } catch {
-        setError("Unable to reach backend API.");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unable to reach backend API.";
+        setError(message);
       }
     };
 
