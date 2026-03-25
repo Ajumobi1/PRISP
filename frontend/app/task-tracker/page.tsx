@@ -45,11 +45,13 @@ const statusVariant: Record<TaskStatus, "secondary" | "warning" | "success" | "d
 
 export default function TaskTrackerPage() {
   // Hydration error guard: only render on client
-  const [isClient, setIsClient] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
   useEffect(() => {
-    setIsClient(true);
+    setHasLoaded(true);
   }, []);
-  if (!isClient) return null;
+  if (!hasLoaded) {
+    return <main className="min-h-screen flex items-center justify-center"><div className="text-slate-600 text-lg">Loading Tracker...</div></main>;
+  }
   const [authChecked, setAuthChecked] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [tasks, setTasks] = useState<PRSTask[]>([]);
