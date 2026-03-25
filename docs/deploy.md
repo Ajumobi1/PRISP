@@ -26,7 +26,7 @@ Then redeploy both services.
 
 ### Health checks
 
-- Backend: `/api/v1/health`
+- Backend: `/api/v1/ping`
 - Frontend: `/`
 
 ### Notes

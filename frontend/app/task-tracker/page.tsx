@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Download, LayoutGrid, Table as TableIcon } from "lucide-react";
+import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ import {
   updateTask,
   uploadTaskAttachments,
 } from "@/lib/api";
+import { logoutSession } from "@/lib/auth-api";
 import { PRSTask, TaskPriority, TaskStatus, statusColumns } from "@/lib/task-types";
 
 type ViewMode = "table" | "kanban";
@@ -458,35 +460,53 @@ export default function TaskTrackerPage() {
     }
   };
 
+  const logout = async () => {
+    await logoutSession();
+    window.location.href = "/login";
+  };
+
   return (
     <main className="mx-auto min-h-screen max-w-[1500px] space-y-6 p-4 md:p-8">
-      <div className="flex flex-col gap-4 rounded-xl border border-border bg-white p-5 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">PRS Unit Task Tracker</h1>
-          <p className="text-sm text-muted-foreground">
-            Spreadsheet-driven operational tracker for Unit Heads and Director of PRS.
-          </p>
-        </div>
+      <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 via-white to-slate-50 p-5 shadow-sm md:p-6">
+        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-3 md:gap-4">
+            <img src="/odchc-logo.svg" alt="ODCHC logo" className="h-14 w-14 rounded-full border border-slate-200 bg-white p-1 shadow-sm" />
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">ODCHC Portal</p>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Unit Task Tracker</h1>
+              <p className="text-sm text-slate-600">
+                Operational tracker for all departments: Planning, Research, Statistics, and M&E.
+              </p>
+            </div>
+            <img src="/odchc-logo.svg" alt="ODCHC logo" className="h-14 w-14 rounded-full border border-slate-200 bg-white p-1 shadow-sm" />
+          </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant={viewMode === "table" ? "default" : "outline"}
-            onClick={() => setViewMode("table")}
-            size="sm"
-          >
-            <TableIcon className="h-4 w-4" /> Table View
-          </Button>
-          <Button
-            variant={viewMode === "kanban" ? "default" : "outline"}
-            onClick={() => setViewMode("kanban")}
-            size="sm"
-            disabled={isBusy}
-          >
-            <LayoutGrid className="h-4 w-4" /> Kanban Board
-          </Button>
-          <Button size="sm" className="gap-2" onClick={onDownloadEverything} disabled={isBusy}>
-            <Download className="h-4 w-4" /> Download Everything
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/dashboard" className="inline-flex h-9 items-center justify-center rounded-md border border-slate-300 px-3 text-sm font-medium text-slate-900 hover:bg-slate-100">
+              Dashboard
+            </Link>
+            <Button
+              variant={viewMode === "table" ? "default" : "outline"}
+              onClick={() => setViewMode("table")}
+              size="sm"
+            >
+              <TableIcon className="h-4 w-4" /> Table View
+            </Button>
+            <Button
+              variant={viewMode === "kanban" ? "default" : "outline"}
+              onClick={() => setViewMode("kanban")}
+              size="sm"
+              disabled={isBusy}
+            >
+              <LayoutGrid className="h-4 w-4" /> Kanban Board
+            </Button>
+            <Button size="sm" className="gap-2" onClick={onDownloadEverything} disabled={isBusy}>
+              <Download className="h-4 w-4" /> Download Everything
+            </Button>
+            <Button size="sm" variant="outline" onClick={logout}>
+              Logout
+            </Button>
+          </div>
         </div>
       </div>
 

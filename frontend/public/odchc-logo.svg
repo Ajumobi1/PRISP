@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-labelledby="odchcTitle odchcDesc">
+  <title id="odchcTitle">ODCHC Logo</title>
+  <desc id="odchcDesc">ODCHC circular emblem with shield and initials</desc>
+  <defs>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e3a8a" />
+    </linearGradient>
+    <linearGradient id="core" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f8fafc" />
+      <stop offset="100%" stop-color="#dbeafe" />
+    </linearGradient>
+  </defs>
+  <circle cx="120" cy="120" r="114" fill="url(#ring)" />
+  <circle cx="120" cy="120" r="95" fill="#ffffff" />
+  <circle cx="120" cy="120" r="86" fill="url(#core)" />
+  <path d="M120 56 L165 78 L158 144 C152 169 134 183 120 190 C106 183 88 169 82 144 L75 78 Z" fill="#1e40af" />
+  <path d="M120 72 L149 86 L145 141 C141 156 130 167 120 173 C110 167 99 156 95 141 L91 86 Z" fill="#f8fafc" />
+  <text x="120" y="126" text-anchor="middle" font-size="28" font-weight="700" fill="#1e3a8a" font-family="Segoe UI, Arial, sans-serif">OD</text>
+  <text x="120" y="153" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a" font-family="Segoe UI, Arial, sans-serif">CHC</text>
+  <text x="120" y="32" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff" font-family="Segoe UI, Arial, sans-serif">ODCHC</text>
+</svg>

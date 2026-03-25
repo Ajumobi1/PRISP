@@ -72,7 +72,7 @@ Deploy frontend and backend as separate services on any platform that supports c
 
 ### Deploy Checklist
 
-- Ensure backend is reachable at `/api/v1/health`
+- Ensure backend is reachable at `/api/v1/ping`
 - Ensure frontend can call `/api/v1/tasks` via rewrite proxy
 - Set production frontend URL in backend `ALLOWED_ORIGINS`
 - Confirm uploads directory is writable by backend runtime
