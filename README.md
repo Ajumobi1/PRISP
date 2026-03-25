@@ -10,9 +10,8 @@ This repository now focuses only on the Unit Task Tracker module.
 
 ### Main Routes
 
-- Frontend base: `/`
-- Unit tracker: `/task-tracker`
-- Admin dashboard: `/dashboard`
+- Frontend base URL opens Unit Tracker directly: `/` -> `/task-tracker`
+- Admin dashboard is on same URL: `/dashboard`
 - Backend base: `/api/v1/tasks`
 
 Both Unit Tracker and Admin Dashboard are served from the same frontend deployment URL.
