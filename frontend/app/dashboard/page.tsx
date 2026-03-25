@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getCurrentSession, logoutSession } from "@/lib/auth-api";
+import { getCurrentSession, logoutSession } from "@/lib/authApi";
 import { fetchTasks } from "@/lib/api";
 import { PRSTask, TaskStatus, UnitName } from "@/lib/task-types";
 
@@ -29,6 +29,7 @@ function formatMonthLabel(month: string) {
 }
 
 export default function DashboardPage() {
+  const [sessionChecked, setSessionChecked] = useState(false);
   const [tasks, setTasks] = useState<PRSTask[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
   const [error, setError] = useState<string | null>(null);
@@ -37,19 +38,30 @@ export default function DashboardPage() {
   useEffect(() => {
     const load = async () => {
       try {
+        const session = await getCurrentSession();
+        if (!session) {
+          window.location.href = "/login?next=/dashboard";
+          return;
+        }
+
         setError(null);
         const data = await fetchTasks();
         setTasks(data);
-        const session = await getCurrentSession();
         setIsAdmin(session?.role === "admin");
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to load dashboard data.";
         setError(message);
+      } finally {
+        setSessionChecked(true);
       }
     };
 
     load();
   }, []);
+
+  if (!sessionChecked) {
+    return <main className="min-h-screen bg-slate-50 px-4 py-10"><div className="mx-auto max-w-5xl text-sm text-slate-600">Loading dashboard...</div></main>;
+  }
 
   const availableMonths = useMemo(() => {
     const months = Array.from(new Set(tasks.map((task) => task.dateAssigned.slice(0, 7)).filter(Boolean)));

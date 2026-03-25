@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { loginSession } from "@/lib/auth-api";
+import { loginSession } from "@/lib/authApi";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next") || "/task-tracker";
@@ -86,5 +86,13 @@ export default function LoginPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-slate-50 px-4 py-10"><div className="mx-auto max-w-md text-sm text-slate-600">Loading login...</div></main>}>
+      <LoginForm />
+    </Suspense>
   );
 }

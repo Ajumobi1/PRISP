@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import { AccountStatus, AccountUser, fetchAdminUsers, getCurrentSession, logoutSession, updateAdminUserStatus } from "@/lib/auth-api";
+import { AccountStatus, AccountUser, fetchAdminUsers, getCurrentSession, logoutSession, updateAdminUserStatus } from "@/lib/authApi";
 
 const orderedStatus: AccountStatus[] = ["pending", "approved", "locked", "declined"];
 
@@ -80,7 +80,7 @@ export default function AccountAdminPage() {
             <div className="flex items-center gap-3 md:gap-4">
               <img src="/odchc-logo.svg" alt="ODCHC logo" className="h-14 w-14 rounded-full border border-slate-200 bg-white p-1 shadow-sm" />
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Backend Admin</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Portal Admin</p>
                 <h1 className="text-2xl font-semibold text-slate-900">Account Administration</h1>
                 <p className="text-sm text-slate-600">Approve, decline, lock, and unlock user access securely.</p>
               </div>

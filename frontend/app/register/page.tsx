@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 
-import { registerAccount } from "@/lib/auth-api";
+import { registerAccount } from "@/lib/authApi";
 
 export default function RegisterPage() {
   const [fullName, setFullName] = useState("");

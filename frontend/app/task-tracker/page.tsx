@@ -22,7 +22,7 @@ import {
   updateTask,
   uploadTaskAttachments,
 } from "@/lib/api";
-import { logoutSession } from "@/lib/auth-api";
+import { getCurrentSession, logoutSession } from "@/lib/authApi";
 import { PRSTask, TaskPriority, TaskStatus, statusColumns } from "@/lib/task-types";
 
 type ViewMode = "table" | "kanban";
@@ -44,6 +44,7 @@ const statusVariant: Record<TaskStatus, "secondary" | "warning" | "success" | "d
 };
 
 export default function TaskTrackerPage() {
+  const [authChecked, setAuthChecked] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [tasks, setTasks] = useState<PRSTask[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
@@ -124,6 +125,12 @@ export default function TaskTrackerPage() {
 
     const loadTasks = async () => {
       try {
+        const session = await getCurrentSession();
+        if (!session) {
+          window.location.href = "/login?next=/task-tracker";
+          return;
+        }
+
         setError(null);
         const remoteTasks = await fetchTasks();
         setTasks(remoteTasks);
@@ -139,13 +146,19 @@ export default function TaskTrackerPage() {
         );
         setTaskUploads(Object.fromEntries(attachmentPairs));
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Unable to reach backend API.";
+        const message = err instanceof Error ? err.message : "Unable to load tracker data.";
         setError(message);
+      } finally {
+        setAuthChecked(true);
       }
     };
 
     loadTasks();
   }, []);
+
+  if (!authChecked) {
+    return <main className="min-h-screen bg-slate-50 px-4 py-10"><div className="mx-auto max-w-5xl text-sm text-slate-600">Loading tracker...</div></main>;
+  }
 
   useEffect(() => {
     localStorage.setItem("prisp.taskTracker.monthTabs", JSON.stringify(customMonths));

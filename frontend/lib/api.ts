@@ -1,32 +1,20 @@
 import { PRSTask, TaskPriority, TaskStatus, UnitName } from "@/lib/task-types";
 
-const API_BASE = "/api/v1";
+const TASKS_STORAGE_KEY = "prisp.local.tasks";
+const ATTACHMENTS_STORAGE_KEY = "prisp.local.attachments";
 
-interface ApiTask {
+interface StoredTask extends PRSTask {
   id: string;
-  serial_number: number;
-  unit: string;
-  task_title: string;
-  task_description: string;
-  assignee: string;
-  date_assigned: string;
-  due_date: string;
-  status: TaskStatus;
-  priority: TaskPriority;
-  deliverable: string | null;
-  checklist: string | null;
-  remarks: string | null;
-  created_at: string;
-  updated_at: string;
 }
 
-interface ApiTaskAttachment {
+interface StoredAttachment {
   id: string;
-  task_id: string;
-  file_name: string;
-  content_type: string;
-  file_size: number;
-  uploaded_at: string;
+  taskId: string;
+  fileName: string;
+  contentType: string;
+  fileSize: number;
+  uploadedAt: string;
+  dataUrl: string;
 }
 
 export interface TaskAttachment {
@@ -52,135 +40,93 @@ export interface CreateTaskPayload {
   remarks: string;
 }
 
-async function getApiErrorMessage(response: Response, fallback: string): Promise<string> {
+function isBrowser(): boolean {
+  return typeof window !== "undefined";
+}
+
+function nextId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function readJson<T>(key: string, fallback: T): T {
+  if (!isBrowser()) {
+    return fallback;
+  }
+
   try {
-    const contentType = response.headers.get("content-type") ?? "";
-    if (contentType.includes("application/json")) {
-      const body = await response.json();
-      if (body && typeof body.detail === "string" && body.detail.trim()) {
-        return body.detail;
-      }
-    } else {
-      const text = await response.text();
-      if (text.trim()) {
-        return text.trim();
-      }
+    const raw = window.localStorage.getItem(key);
+    if (!raw) {
+      return fallback;
     }
+    return JSON.parse(raw) as T;
   } catch {
     return fallback;
   }
-  return fallback;
 }
 
-function toUiAttachment(attachment: ApiTaskAttachment): TaskAttachment {
+function writeJson<T>(key: string, value: T): void {
+  if (!isBrowser()) {
+    return;
+  }
+  window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+function readTasks(): StoredTask[] {
+  const parsed = readJson<StoredTask[]>(TASKS_STORAGE_KEY, []);
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+function saveTasks(tasks: StoredTask[]): void {
+  writeJson(TASKS_STORAGE_KEY, tasks);
+}
+
+function readAttachments(): StoredAttachment[] {
+  const parsed = readJson<StoredAttachment[]>(ATTACHMENTS_STORAGE_KEY, []);
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+function saveAttachments(attachments: StoredAttachment[]): void {
+  writeJson(ATTACHMENTS_STORAGE_KEY, attachments);
+}
+
+function toPublicAttachment(attachment: StoredAttachment): TaskAttachment {
   return {
     id: attachment.id,
-    taskId: attachment.task_id,
-    fileName: attachment.file_name,
-    contentType: attachment.content_type,
-    fileSize: attachment.file_size,
-    uploadedAt: attachment.uploaded_at,
+    taskId: attachment.taskId,
+    fileName: attachment.fileName,
+    contentType: attachment.contentType,
+    fileSize: attachment.fileSize,
+    uploadedAt: attachment.uploadedAt,
   };
 }
 
-function toUiTask(task: ApiTask): PRSTask {
+function toStoredTask(payload: CreateTaskPayload): StoredTask {
+  const tasks = readTasks();
+  const nextSerial = tasks.length > 0 ? Math.max(...tasks.map((task) => task.serialNumber)) + 1 : 1;
+
   return {
-    id: task.id,
-    serialNumber: task.serial_number,
-    unit: task.unit as UnitName,
-    taskTitle: task.task_title,
-    taskDescription: task.task_description,
-    assignee: task.assignee,
-    dateAssigned: task.date_assigned,
-    dueDate: task.due_date,
-    status: task.status,
-    priority: task.priority,
-    deliverable: task.deliverable ?? "",
-    checklist: task.checklist ?? "",
-    remarks: task.remarks ?? "",
+    id: nextId("task"),
+    serialNumber: nextSerial,
+    unit: payload.unit,
+    taskTitle: payload.taskTitle,
+    taskDescription: payload.taskDescription,
+    assignee: payload.assignee,
+    dateAssigned: payload.dateAssigned,
+    dueDate: payload.dueDate,
+    status: payload.status,
+    priority: payload.priority,
+    deliverable: payload.deliverable,
+    checklist: payload.checklist,
+    remarks: payload.remarks,
   };
 }
 
-export async function fetchTasks(): Promise<PRSTask[]> {
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE}/tasks`, { cache: "no-store" });
-  } catch {
-    throw new Error("Cannot reach backend service. Confirm backend is running and reachable.");
+function downloadBlob(content: string, contentType: string, filename: string): void {
+  if (!isBrowser()) {
+    return;
   }
 
-  if (!response.ok) {
-    throw new Error(await getApiErrorMessage(response, "Failed to fetch tasks"));
-  }
-  const data = (await response.json()) as ApiTask[];
-  return data.map(toUiTask);
-}
-
-export async function createTask(payload: CreateTaskPayload): Promise<PRSTask> {
-  const response = await fetch(`${API_BASE}/tasks`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      unit: payload.unit,
-      task_title: payload.taskTitle,
-      task_description: payload.taskDescription,
-      assignee: payload.assignee,
-      date_assigned: payload.dateAssigned,
-      due_date: payload.dueDate,
-      status: payload.status,
-      priority: payload.priority,
-      deliverable: payload.deliverable,
-      checklist: payload.checklist,
-      remarks: payload.remarks,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(await getApiErrorMessage(response, "Failed to create task"));
-  }
-
-  const data = (await response.json()) as ApiTask;
-  return toUiTask(data);
-}
-
-export async function updateTask(taskId: string, payload: CreateTaskPayload): Promise<PRSTask> {
-  const response = await fetch(`${API_BASE}/tasks/${taskId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      unit: payload.unit,
-      task_title: payload.taskTitle,
-      task_description: payload.taskDescription,
-      assignee: payload.assignee,
-      date_assigned: payload.dateAssigned,
-      due_date: payload.dueDate,
-      status: payload.status,
-      priority: payload.priority,
-      deliverable: payload.deliverable,
-      checklist: payload.checklist,
-      remarks: payload.remarks,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(await getApiErrorMessage(response, "Failed to update task"));
-  }
-
-  const data = (await response.json()) as ApiTask;
-  return toUiTask(data);
-}
-
-export async function downloadTasks(format: "csv" | "xlsx" | "pdf"): Promise<void> {
-  const response = await fetch(`${API_BASE}/tasks/export/${format}`);
-  if (!response.ok) {
-    throw new Error(`Failed to export ${format}`);
-  }
-
-  const blob = await response.blob();
-  const contentDisposition = response.headers.get("Content-Disposition") ?? "";
-  const matchedName = contentDisposition.match(/filename=\"(.+)\"/);
-  const filename = matchedName?.[1] ?? `prs-task-tracker.${format}`;
-
+  const blob = new Blob([content], { type: contentType });
   const blobUrl = window.URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = blobUrl;
@@ -191,46 +137,143 @@ export async function downloadTasks(format: "csv" | "xlsx" | "pdf"): Promise<voi
   window.URL.revokeObjectURL(blobUrl);
 }
 
-export async function uploadTaskAttachments(taskId: string, files: File[]): Promise<TaskAttachment[]> {
-  const formData = new FormData();
-  files.forEach((file) => formData.append("files", file));
+function asCsv(tasks: PRSTask[]): string {
+  const headers = [
+    "S/N",
+    "Unit",
+    "Task",
+    "Description",
+    "Assignee",
+    "Start Date",
+    "End Date",
+    "Status",
+    "Priority",
+    "Deliverable",
+    "Checklist",
+    "Remarks",
+  ];
 
-  const response = await fetch(`${API_BASE}/tasks/${taskId}/attachments`, {
-    method: "POST",
-    body: formData,
-  });
+  const escape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+  const rows = tasks.map((task) => [
+    String(task.serialNumber),
+    task.unit,
+    task.taskTitle,
+    task.taskDescription,
+    task.assignee,
+    task.dateAssigned,
+    task.dueDate,
+    task.status,
+    task.priority,
+    task.deliverable,
+    task.checklist,
+    task.remarks,
+  ]);
 
-  if (!response.ok) {
-    throw new Error(await getApiErrorMessage(response, "Failed to upload task attachments"));
+  return [headers, ...rows].map((row) => row.map((cell) => escape(cell ?? "")).join(",")).join("\n");
+}
+
+export async function fetchTasks(): Promise<PRSTask[]> {
+  return readTasks().sort((a, b) => a.serialNumber - b.serialNumber);
+}
+
+export async function createTask(payload: CreateTaskPayload): Promise<PRSTask> {
+  const nextTask = toStoredTask(payload);
+  const tasks = readTasks();
+  tasks.push(nextTask);
+  saveTasks(tasks);
+  return nextTask;
+}
+
+export async function updateTask(taskId: string, payload: CreateTaskPayload): Promise<PRSTask> {
+  const tasks = readTasks();
+  const index = tasks.findIndex((task) => task.id === taskId);
+  if (index < 0) {
+    throw new Error("Task not found.");
   }
 
-  const data = (await response.json()) as ApiTaskAttachment[];
-  return data.map(toUiAttachment);
+  const current = tasks[index];
+  const updated: StoredTask = {
+    ...current,
+    unit: payload.unit,
+    taskTitle: payload.taskTitle,
+    taskDescription: payload.taskDescription,
+    assignee: payload.assignee,
+    dateAssigned: payload.dateAssigned,
+    dueDate: payload.dueDate,
+    status: payload.status,
+    priority: payload.priority,
+    deliverable: payload.deliverable,
+    checklist: payload.checklist,
+    remarks: payload.remarks,
+  };
+
+  tasks[index] = updated;
+  saveTasks(tasks);
+  return updated;
+}
+
+export async function downloadTasks(format: "csv" | "xlsx" | "pdf"): Promise<void> {
+  const tasks = await fetchTasks();
+  const now = new Date().toISOString().slice(0, 10);
+
+  if (format === "csv") {
+    downloadBlob(asCsv(tasks), "text/csv;charset=utf-8", `prs-task-tracker-${now}.csv`);
+    return;
+  }
+
+  if (format === "xlsx") {
+    downloadBlob(asCsv(tasks), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", `prs-task-tracker-${now}.xlsx`);
+    return;
+  }
+
+  const pdfLike = [
+    "PRS Task Tracker",
+    "",
+    ...tasks.map((task) => `${task.serialNumber}. ${task.taskTitle} | ${task.unit} | ${task.assignee} | ${task.status} | ${task.dueDate}`),
+  ].join("\n");
+
+  downloadBlob(pdfLike, "application/pdf", `prs-task-tracker-${now}.pdf`);
+}
+
+export async function uploadTaskAttachments(taskId: string, files: File[]): Promise<TaskAttachment[]> {
+  const toDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+    reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
+    reader.readAsDataURL(file);
+  });
+
+  const dataUrls = await Promise.all(files.map((file) => toDataUrl(file)));
+  const allAttachments = readAttachments();
+  const created: StoredAttachment[] = files.map((file, index) => ({
+    id: nextId("attachment"),
+    taskId,
+    fileName: file.name,
+    contentType: file.type || "application/octet-stream",
+    fileSize: file.size,
+    uploadedAt: new Date().toISOString(),
+    dataUrl: dataUrls[index],
+  }));
+
+  allAttachments.push(...created);
+  saveAttachments(allAttachments);
+  return created.map(toPublicAttachment);
 }
 
 export async function fetchTaskAttachments(taskId: string): Promise<TaskAttachment[]> {
-  const response = await fetch(`${API_BASE}/tasks/${taskId}/attachments`, { cache: "no-store" });
-  if (!response.ok) {
-    if (response.status === 404) {
-      return [];
-    }
-    throw new Error(await getApiErrorMessage(response, "Failed to fetch task attachments"));
-  }
-
-  const data = (await response.json()) as ApiTaskAttachment[];
-  return data.map(toUiAttachment);
+  return readAttachments()
+    .filter((attachment) => attachment.taskId === taskId)
+    .sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt))
+    .map(toPublicAttachment);
 }
 
 export function getTaskAttachmentDownloadUrl(taskId: string, attachmentId: string): string {
-  return `${API_BASE}/tasks/${taskId}/attachments/${attachmentId}`;
+  const attachment = readAttachments().find((entry) => entry.taskId === taskId && entry.id === attachmentId);
+  return attachment?.dataUrl ?? "#";
 }
 
 export async function deleteTaskAttachment(taskId: string, attachmentId: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/tasks/${taskId}/attachments/${attachmentId}`, {
-    method: "DELETE",
-  });
-
-  if (!response.ok) {
-    throw new Error(await getApiErrorMessage(response, "Failed to delete task attachment"));
-  }
+  const current = readAttachments();
+  const filtered = current.filter((attachment) => !(attachment.taskId === taskId && attachment.id === attachmentId));
+  saveAttachments(filtered);
 }
