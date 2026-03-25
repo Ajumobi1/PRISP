@@ -44,9 +44,7 @@ function isBrowser(): boolean {
   return typeof window !== "undefined";
 }
 
-function nextId(prefix: string): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
+import { generateId } from "./idUtils";
 
 function readJson<T>(key: string, fallback: T): T {
   if (!isBrowser()) {
@@ -105,7 +103,7 @@ function toStoredTask(payload: CreateTaskPayload): StoredTask {
   const nextSerial = tasks.length > 0 ? Math.max(...tasks.map((task) => task.serialNumber)) + 1 : 1;
 
   return {
-    id: nextId("task"),
+    id: generateId("task"),
     serialNumber: nextSerial,
     unit: payload.unit,
     taskTitle: payload.taskTitle,
@@ -246,7 +244,7 @@ export async function uploadTaskAttachments(taskId: string, files: File[]): Prom
   const dataUrls = await Promise.all(files.map((file) => toDataUrl(file)));
   const allAttachments = readAttachments();
   const created: StoredAttachment[] = files.map((file, index) => ({
-    id: nextId("attachment"),
+    id: generateId("attachment"),
     taskId,
     fileName: file.name,
     contentType: file.type || "application/octet-stream",

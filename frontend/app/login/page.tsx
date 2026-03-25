@@ -4,7 +4,8 @@ import Link from "next/link";
 import { FormEvent, Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { loginSession } from "@/lib/authApi";
+import { readUsers, setCurrentUserId } from "@/lib/clientStorage";
+import { toSessionUser } from "@/lib/accountCore";
 
 function LoginForm() {
   const router = useRouter();
@@ -22,7 +23,22 @@ function LoginForm() {
     setError(null);
 
     try {
-      const session = await loginSession(username, password);
+      // Client-only login logic
+      const user = readUsers().find((entry) => entry.username.toLowerCase() === username.trim().toLowerCase());
+      if (!user || user.password !== password) {
+        throw new Error("Invalid username or password.");
+      }
+      if (user.status === "pending") {
+        throw new Error("Account is pending admin approval.");
+      }
+      if (user.status === "declined") {
+        throw new Error("Account has been declined by admin.");
+      }
+      if (user.status === "locked") {
+        throw new Error("Account is locked by admin.");
+      }
+      setCurrentUserId(user.id);
+      const session = toSessionUser(user);
       if (session.role === "admin") {
         router.replace(nextPath === "/login" ? "/account-admin" : nextPath);
       } else {

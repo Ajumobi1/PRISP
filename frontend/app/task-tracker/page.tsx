@@ -48,8 +48,8 @@ const statusVariant: Record<TaskStatus, "secondary" | "warning" | "success" | "d
   useEffect(() => {
     setIsClient(true);
   }, []);
-  if (!isClient) {
-    return <div className="min-h-screen bg-gray-900 text-white p-10">Connecting...</div>;
+  if (!isClient) { 
+    return <div className="min-h-screen bg-gray-900 text-white p-10">Connecting...</div>; 
   }
   const [authChecked, setAuthChecked] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("table");

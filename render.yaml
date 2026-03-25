@@ -1,9 +1,0 @@
-services:
-  - type: web
-    name: prisp-frontend
-    runtime: node
-    rootDir: frontend
-    plan: free
-    buildCommand: npm ci && npm run build
-    startCommand: npm run start -- --hostname 0.0.0.0 --port $PORT
-    healthCheckPath: /

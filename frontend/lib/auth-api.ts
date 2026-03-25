@@ -30,9 +30,7 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function makeId(prefix: string): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
+import { generateId } from "./idUtils";
 
 function readJson<T>(key: string, fallback: T): T {
   if (!isBrowser()) {
@@ -88,7 +86,7 @@ function seedAdminIfNeeded(): void {
 
   const timestamp = nowIso();
   const admin: StoredUser = {
-    id: makeId("user"),
+    id: generateId("user"),
     full_name: "System Admin",
     username: "admin",
     email: "admin@local.prisp",
@@ -196,7 +194,7 @@ export async function registerAccount(payload: {
 
   const timestamp = nowIso();
   const created: StoredUser = {
-    id: makeId("user"),
+    id: generateId("user"),
     full_name: payload.fullName.trim(),
     username: payload.username.trim(),
     email: payload.email.trim(),

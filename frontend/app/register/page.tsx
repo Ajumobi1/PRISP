@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 
-import { registerAccount } from "@/lib/authApi";
+import { readUsers, saveUsers } from "@/lib/clientStorage";
+import { generateId } from "@/lib/idUtils";
+import { nowIso } from "@/lib/accountTypes";
 
 export default function RegisterPage() {
   const [fullName, setFullName] = useState("");
@@ -28,14 +30,34 @@ export default function RegisterPage() {
 
     try {
       setIsSubmitting(true);
-      const detail = await registerAccount({
-        fullName,
-        username,
-        email,
-        department,
+      // Client-only registration logic
+      const normalizedUsername = username.trim().toLowerCase();
+      const normalizedEmail = email.trim().toLowerCase();
+      if (!fullName.trim() || !normalizedUsername || !normalizedEmail || !password.trim()) {
+        throw new Error("Full name, username, email, and password are required.");
+      }
+      const users = readUsers();
+      if (users.some((entry) => entry.username.toLowerCase() === normalizedUsername)) {
+        throw new Error("Username already exists.");
+      }
+      if (users.some((entry) => entry.email.toLowerCase() === normalizedEmail)) {
+        throw new Error("Email already exists.");
+      }
+      const timestamp = nowIso();
+      users.push({
+        id: generateId("user"),
+        full_name: fullName.trim(),
+        username: username.trim(),
+        email: email.trim(),
+        department: department.trim() || "Planning",
+        role: "user",
+        status: "pending",
+        created_at: timestamp,
+        updated_at: timestamp,
         password,
       });
-      setMessage(detail);
+      saveUsers(users);
+      setMessage("Account submitted. Awaiting admin approval.");
       setFullName("");
       setUsername("");
       setEmail("");
