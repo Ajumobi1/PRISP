@@ -44,6 +44,12 @@ const statusVariant: Record<TaskStatus, "secondary" | "warning" | "success" | "d
 };
 
 export default function TaskTrackerPage() {
+  // Hydration error guard: only render on client
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+  if (!isClient) return null;
   const [authChecked, setAuthChecked] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [tasks, setTasks] = useState<PRSTask[]>([]);
