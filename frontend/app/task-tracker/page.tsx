@@ -43,14 +43,13 @@ const statusVariant: Record<TaskStatus, "secondary" | "warning" | "success" | "d
   Delayed: "destructive",
 };
 
-export default function TaskTrackerPage() {
-  // Hydration error guard: only render on client
-  const [mounted, setMounted] = useState(false);
+  // Strict client-only rendering guard
+  const [isClient, setIsClient] = useState(false);
   useEffect(() => {
-    setMounted(true);
+    setIsClient(true);
   }, []);
-  if (!mounted) {
-    return <div className="p-20 text-center">Loading your dashboard...</div>;
+  if (!isClient) {
+    return <div className="min-h-screen bg-gray-900 text-white p-10">Connecting...</div>;
   }
   const [authChecked, setAuthChecked] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("table");
