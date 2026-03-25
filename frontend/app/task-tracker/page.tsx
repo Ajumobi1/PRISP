@@ -45,12 +45,12 @@ const statusVariant: Record<TaskStatus, "secondary" | "warning" | "success" | "d
 
 export default function TaskTrackerPage() {
   // Hydration error guard: only render on client
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const [mounted, setMounted] = useState(false);
   useEffect(() => {
-    setHasLoaded(true);
+    setMounted(true);
   }, []);
-  if (!hasLoaded) {
-    return <main className="min-h-screen flex items-center justify-center"><div className="text-slate-600 text-lg">Loading Tracker...</div></main>;
+  if (!mounted) {
+    return <div className="p-20 text-center">Loading your dashboard...</div>;
   }
   const [authChecked, setAuthChecked] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("table");
