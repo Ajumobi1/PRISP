@@ -4,9 +4,8 @@ import { NextResponse } from "next/server";
 const AUTH_COOKIE = "prisp_auth_token";
 const BACKEND_BASE = (process.env.BACKEND_API_BASE_URL || "http://localhost:8000/api/v1").replace(/\/$/, "");
 
-type RouteParams = { params: { userId: string } };
-
-export async function PATCH(request: Request, { params }: RouteParams) {
+export async function PATCH(request: Request, context: { params: Promise<{ userId: string }> }) {
+  const { userId } = await context.params;
   const cookieStore = await cookies();
   const token = cookieStore.get(AUTH_COOKIE)?.value;
 
@@ -21,7 +20,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     return NextResponse.json({ detail: "Status is required" }, { status: 400 });
   }
 
-  const response = await fetch(`${BACKEND_BASE}/auth/admin/users/${params.userId}/status`, {
+  const response = await fetch(`${BACKEND_BASE}/auth/admin/users/${userId}/status`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
