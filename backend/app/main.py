@@ -69,11 +69,6 @@ def startup_db_diagnostic() -> None:
         logger.exception("Startup DB check: FAILED (%s)", exc)
 
 
-@app.get("/health")
-def health_check() -> dict[str, str]:
-    return {"status": "ok", "service": "prisp-backend"}
-
-
 @app.get("/api/v1/ping")
 def api_ping() -> dict[str, str]:
     return {"status": "ok", "service": "prisp-backend", "message": "pong"}
@@ -82,16 +77,3 @@ def api_ping() -> dict[str, str]:
 @app.get("/api/ping")
 def api_ping_alias() -> dict[str, str]:
     return api_ping()
-
-
-@app.get("/api/v1/runtime")
-def api_runtime() -> dict[str, bool | str]:
-    return {
-        "status": "ok",
-        "service": "prisp-backend",
-        "has_DATABASE_URL": bool(os.getenv("DATABASE_URL")),
-        "has_POSTGRES_URL": bool(os.getenv("POSTGRES_URL")),
-        "has_POSTGRES_INTERNAL_URL": bool(os.getenv("POSTGRES_INTERNAL_URL")),
-        "has_PGHOST": bool(os.getenv("PGHOST")),
-        "has_POSTGRES_HOST": bool(os.getenv("POSTGRES_HOST")),
-    }
