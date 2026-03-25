@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import { AccountStatus, AccountUser, fetchAdminUsers, getCurrentSession, logoutSession, updateAdminUserStatus } from "@/lib/authApi";
+import { AccountStatus, AccountUser, StoredUser } from "@/lib/accountTypes";
+import { readUsers, saveUsers, getCurrentUserId, clearCurrentUserId } from "@/lib/clientStorage";
 
 const orderedStatus: AccountStatus[] = ["pending", "approved", "locked", "declined"];
 
@@ -15,31 +16,30 @@ export default function AccountAdminPage() {
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const session = await getCurrentSession();
-        if (!session) {
-          window.location.href = "/login?next=/account-admin";
-          return;
-        }
-
-        if (session.role !== "admin") {
-          window.location.href = "/task-tracker";
-          return;
-        }
-
-        setSessionChecked(true);
-        const fetched = await fetchAdminUsers();
-        setUsers(fetched);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to load users.";
-        setError(message);
-      } finally {
-        setIsLoading(false);
+    try {
+      const userId = getCurrentUserId();
+      if (!userId) {
+        window.location.href = "/login?next=/account-admin";
+        return;
       }
-    };
-
-    load();
+      const users = readUsers();
+      const session = users.find((u) => u.id === userId);
+      if (!session) {
+        window.location.href = "/login?next=/account-admin";
+        return;
+      }
+      if (session.role !== "admin") {
+        window.location.href = "/task-tracker";
+        return;
+      }
+      setSessionChecked(true);
+      setUsers(users.map((u) => ({ ...u } as AccountUser)));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load users.";
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   const grouped = useMemo(() => {
@@ -53,8 +53,13 @@ export default function AccountAdminPage() {
     try {
       setBusyUserId(user.id);
       setError(null);
-      const updated = await updateAdminUserStatus(user.id, status);
-      setUsers((prev) => prev.map((entry) => (entry.id === updated.id ? updated : entry)));
+      const users = readUsers();
+      const index = users.findIndex((entry) => entry.id === user.id);
+      if (index < 0) throw new Error("User not found.");
+      if (users[index].role === "admin" && status !== "approved") throw new Error("Admin account cannot be declined or locked.");
+      users[index] = { ...users[index], status, updated_at: new Date().toISOString() };
+      saveUsers(users);
+      setUsers(users.map((u) => ({ ...u } as AccountUser)));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to update account status.";
       setError(message);
@@ -64,7 +69,7 @@ export default function AccountAdminPage() {
   };
 
   const signOut = async () => {
-    await logoutSession();
+    clearCurrentUserId();
     window.location.href = "/login";
   };
 
